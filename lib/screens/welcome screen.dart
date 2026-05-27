@@ -1,5 +1,6 @@
-import 'package:contractor_hub/reusable_button.dart';
+import 'package:contractor_hub/components/reusable_button.dart';
 import 'package:flutter/material.dart';
+import 'package:animated_text_kit/animated_text_kit.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -59,14 +60,23 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   ),
                 ),
                 SizedBox(width: 10),
-                Text('Contractor Hub', style: TextStyle(fontSize: 20)),
+                DefaultTextStyle(
+                  style: TextStyle(
+                    fontSize: 35.0,
+                    color: Colors.black,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  child: AnimatedTextKit(
+                    animatedTexts: [TypewriterAnimatedText('Contractor Hub')],
+                  ),
+                ),
               ],
             ),
             Expanded(
               child: ReusableButton(
                 buttonText: 'Login',
                 onPress: () => Navigator.pushNamed(context, '/loginPage'),
-                buttonHeight: 30,
+                buttonHeight: 10,
                 buttonWidth: double.infinity,
                 buttonColor: Colors.white,
                 buttonPadding: 20,
@@ -77,7 +87,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 buttonText: 'Create New Account',
                 onPress: () =>
                     Navigator.pushNamed(context, '/createNewAccount'),
-                buttonHeight: 30,
+                buttonHeight: 10,
                 buttonWidth: double.infinity,
                 buttonColor: Colors.white,
                 buttonPadding: 20,
