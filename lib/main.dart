@@ -24,7 +24,7 @@ void main() {
       ),
       initialRoute: '/loginOrCreateAccount',
       routes: {
-        '/loginOrCreateAccount': (context) => LoginOrCreateAccount(),
+        '/loginOrCreateAccount': (context) => WelcomeScreen(),
         '/loginPage': (context) => LoginPage(),
         '/homePage': (context) => HomePage(),
         '/clockInOut': (context) => ClockInOut(),
