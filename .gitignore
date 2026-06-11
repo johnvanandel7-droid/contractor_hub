@@ -12,38 +12,61 @@
 .swiftpm/
 migrate_working_dir/
 
-# IntelliJ related
+# === SECURITY - CRITICAL ===
+google-services.json
+GoogleService-Info.plist
+lib/firebase_options.dart
+*.p8
+*.p12
+service-account*.json
+
+# Environment variables
+.env*
+.env.local
+.env.development
+.env.production
+.env.staging
+
+# IntelliJ / Android Studio
 *.iml
 *.ipr
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
+# VS Code (commented by default)
 #.vscode/
 
-# Flutter/Dart/Pub related
+# Flutter / Dart / Pub
 **/doc/api/
-**/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
-/build/
-/coverage/
+build/
+coverage/
+**/ios/Flutter/.last_build_id
 
-# Symbolication related
-app.*.symbols
+# iOS specific
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Runner/Generated.xcconfig
 
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
+# Android build artifacts
 /android/app/debug
 /android/app/profile
 /android/app/release
-# Firebase secrets
-lib/firebase_options.dart
-*.env
-.env
+
+# Symbolication & Obfuscation
+app.*.symbols
+app.*.map.json
+
+# Generated files
+*.dart.js
+*.info.json
+*.js
+*.js_
+*.js.deps
+*.js.map
