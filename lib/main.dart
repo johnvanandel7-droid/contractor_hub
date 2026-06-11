@@ -1,3 +1,4 @@
+import 'package:contractor_hub/screens/register_screen.dart';
 import 'package:contractor_hub/screens/welcome%20screen.dart';
 import 'package:contractor_hub/screens/to_do_list.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -26,13 +27,14 @@ void main() async {
           onSurface: Colors.black,
         ),
       ),
-      initialRoute: '/loginOrCreateAccount',
+      initialRoute: '/welcomeScreen',
       routes: {
-        '/loginOrCreateAccount': (context) => WelcomeScreen(),
+        '/welcomeScreen': (context) => WelcomeScreen(),
         '/loginPage': (context) => LoginScreen(),
         '/homePage': (context) => HomePage(),
         '/clockInOut': (context) => ClockInOut(),
         '/toDoList': (context) => ToDoList(),
+        '/registerScreen': (context) => RegistrationScreen(),
       },
     ),
   );
