@@ -14,12 +14,12 @@ class HomePage extends StatelessWidget {
         title: Text('Contractor Hub', style: kLargeTextSize),
       ),
       body: SafeArea(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: ReusableButton(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ReusableButton(
                 buttonText: 'Clock In / Out',
                 onPress: () {
                   Navigator.pushNamed(context, '/clockInOut');
@@ -29,9 +29,7 @@ class HomePage extends StatelessWidget {
                 buttonColor: Colors.purple,
                 buttonPadding: 8,
               ),
-            ),
-            Expanded(
-              child: ReusableButton(
+              ReusableButton(
                 buttonText: 'ToDo List',
                 onPress: () {
                   Navigator.pushNamed(context, '/toDoList');
@@ -41,8 +39,8 @@ class HomePage extends StatelessWidget {
                 buttonColor: Colors.black87,
                 buttonPadding: 8,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

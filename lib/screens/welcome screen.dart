@@ -72,26 +72,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 ),
               ],
             ),
-            Expanded(
-              child: ReusableButton(
-                buttonText: 'Login',
-                onPress: () => Navigator.pushNamed(context, '/loginPage'),
-                buttonHeight: 10,
-                buttonWidth: double.infinity,
-                buttonColor: Colors.white,
-                buttonPadding: 20,
-              ),
+            ReusableButton(
+              buttonText: 'Login',
+              onPress: () => Navigator.pushNamed(context, '/loginPage'),
+              buttonHeight: 50,
+              buttonWidth: double.infinity,
+              buttonColor: Colors.grey,
+              buttonPadding: 20,
             ),
-            Expanded(
-              child: ReusableButton(
-                buttonText: 'Create New Account',
-                onPress: () =>
-                    Navigator.pushNamed(context, '/createNewAccount'),
-                buttonHeight: 10,
-                buttonWidth: double.infinity,
-                buttonColor: Colors.white,
-                buttonPadding: 20,
-              ),
+            ReusableButton(
+              buttonText: 'Create New Account',
+              onPress: () => Navigator.pushNamed(context, '/registerScreen'),
+              buttonHeight: 50,
+              buttonWidth: double.infinity,
+              buttonColor: Colors.blue,
+              buttonPadding: 20,
             ),
           ],
         ),

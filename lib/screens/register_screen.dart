@@ -124,13 +124,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           )[0], // Use email prefix as initial name
           'createdAt': FieldValue.serverTimestamp(),
           'phoneToken': token ?? '',
-          'isBanned': false,
           'emailPreferences': {
             'marketing': agreeToEmails,
             'orderUpdates': true,
             'messages': true,
           },
-          'accountType': 'free_trial', // or 'paid' if registration fee was paid
           'verified': false,
         });
       }
