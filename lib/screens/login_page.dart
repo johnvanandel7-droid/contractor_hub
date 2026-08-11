@@ -125,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       // Now safe to use context
                       // ignore: use_build_context_synchronously
-                      Navigator.pushReplacementNamed(context, 'home_page');
+                      Navigator.pushReplacementNamed(context, '/homePage');
 
                       turnSpinnerOnOff(false);
                     } else {

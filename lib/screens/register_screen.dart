@@ -25,8 +25,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   String? confirmPassword;
   bool allowedEntry = false;
   String deniedEntryReason = '';
-  bool agreedToTerms = false;
-  bool agreeToEmails = true;
+  bool isEmployee = true;
+  String? numberOfEmployees;
 
   @override
   void initState() {
@@ -85,14 +85,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return;
     }
 
-    if (!agreedToTerms) {
-      setState(() {
-        deniedEntryReason = 'You must agree to the Terms of Service';
-        showSpinner = false;
-      });
-      return;
-    }
-
     try {
       // Create user in Firebase Authentication
       final UserCredential userCredential = await _auth
@@ -119,17 +111,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         await docRef.set({
           'userId': uid,
           'userEmail': email!.trim().toLowerCase(),
-          'displayName': email!.split(
-            '@',
-          )[0], // Use email prefix as initial name
           'createdAt': FieldValue.serverTimestamp(),
           'phoneToken': token ?? '',
-          'emailPreferences': {
-            'marketing': agreeToEmails,
-            'orderUpdates': true,
-            'messages': true,
-          },
-          'verified': false,
+          'isEmployee': isEmployee,
+          if (isEmployee == false) 'numberOfEmployees': numberOfEmployees,
         });
       }
 
@@ -145,7 +130,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
 
       // Navigate to home
-      Navigator.pushNamedAndRemoveUntil(context, 'home_page', (route) => false);
+      Navigator.pushNamedAndRemoveUntil(context, '/homePage', (route) => false);
     } on FirebaseAuthException catch (e) {
       String message;
 
@@ -205,13 +190,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 const SizedBox(height: 20),
-                Flexible(
-                  child: Hero(
-                    tag: 'contractor',
-                    child: SizedBox(
-                      height: 120.0,
-                      child: Image.asset('images/contractor.png'),
-                    ),
+                Hero(
+                  tag: 'contractor',
+                  child: SizedBox(
+                    height: 120.0,
+                    child: Image.asset('images/contractor.png'),
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -291,66 +274,49 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Terms checkbox
                 Row(
                   children: [
-                    Checkbox(
-                      value: agreedToTerms,
-                      onChanged: (value) {
+                    ElevatedButton(
+                      onPressed: () {
                         setState(() {
-                          agreedToTerms = value ?? false;
+                          isEmployee = true;
                         });
                       },
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            agreedToTerms = !agreedToTerms;
-                          });
-                        },
-                        child: Text(
-                          'I agree to the Terms of Service and Privacy Policy',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[700],
-                          ),
-                        ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isEmployee == false
+                            ? Colors.white70
+                            : Colors.grey,
                       ),
+                      child: Text('Employee'),
+                    ),
+                    Spacer(),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          isEmployee = false;
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isEmployee == true
+                            ? Colors.white70
+                            : Colors.grey,
+                      ),
+                      child: Text('Owner/foreman'),
                     ),
                   ],
                 ),
-
-                // Email preferences checkbox
-                Row(
-                  children: [
-                    Checkbox(
-                      value: agreeToEmails,
-                      onChanged: (value) {
-                        setState(() {
-                          agreeToEmails = value ?? false;
-                        });
-                      },
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            agreeToEmails = !agreeToEmails;
-                          });
-                        },
-                        child: Text(
-                          'Send me offers and updates about contractor hub',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                if (isEmployee == false) Text('Number of employees'),
+                TextField(
+                  decoration: kInputDecoration.copyWith(
+                    hintText: 'number of employees',
+                  ),
+                  onChanged: (value) {
+                    if (value != int) {
+                      deniedEntryReason = 'invalid number of employees';
+                    }
+                    numberOfEmployees = value;
+                  },
                 ),
-                const SizedBox(height: 16),
 
                 // Error message
                 if (deniedEntryReason.isNotEmpty)
@@ -385,7 +351,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       style: TextStyle(color: Colors.grey[700]),
                     ),
                     GestureDetector(
-                      onTap: () => Navigator.pop(context),
+                      onTap: () => Navigator.pushNamed(context, '/loginPage'),
                       child: const Text(
                         'Log in',
                         style: TextStyle(
@@ -396,7 +362,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 60),
               ],
             ),
           ),

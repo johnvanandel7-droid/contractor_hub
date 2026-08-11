@@ -17,13 +17,13 @@ void main() async {
       theme: ThemeData(
         colorScheme: ColorScheme(
           brightness: Brightness.light,
-          primary: Colors.blueAccent,
+          primary: Colors.black,
           onPrimary: Colors.white,
           secondary: Colors.lightBlueAccent,
           onSecondary: Colors.white,
           error: Colors.red,
           onError: Colors.white,
-          surface: Colors.blue,
+          surface: Colors.white70,
           onSurface: Colors.black,
         ),
       ),
