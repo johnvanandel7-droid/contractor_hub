@@ -30,6 +30,9 @@ dependencies:
   # location
   geolocator: ^14.0.2
   geo_currencies: ^0.0.6
+  
+  # other
+  timeago: ^3.7.0
 
 dev_dependencies:
   flutter_test:

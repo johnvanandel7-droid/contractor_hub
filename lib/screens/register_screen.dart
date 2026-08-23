@@ -27,6 +27,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   String deniedEntryReason = '';
   bool isEmployee = true;
   String? numberOfEmployees;
+  TextEditingController companyNameController = TextEditingController();
 
   @override
   void initState() {
@@ -114,6 +115,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           'createdAt': FieldValue.serverTimestamp(),
           'phoneToken': token ?? '',
           'isEmployee': isEmployee,
+          'companyName': companyNameController.text,
           if (isEmployee == false) 'numberOfEmployees': numberOfEmployees,
         });
       }
@@ -274,6 +276,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 ),
                 const SizedBox(height: 16),
 
+                const Text('Company name'),
+
+                TextField(
+                  controller: companyNameController,
+                  decoration: kInputDecoration.copyWith(
+                    hintText: 'company name',
+                  ),
+                ),
+
+                const SizedBox(height: 5),
+
                 Row(
                   children: [
                     ElevatedButton(
@@ -311,10 +324,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     hintText: 'number of employees',
                   ),
                   onChanged: (value) {
-                    if (value != int) {
-                      deniedEntryReason = 'invalid number of employees';
-                    }
-                    numberOfEmployees = value;
+                    setState(() {
+                      if (value.isNotEmpty && int.tryParse(value) == null) {
+                        deniedEntryReason = 'invalid number of employees';
+                      } else {
+                        deniedEntryReason = '';
+                      }
+                      numberOfEmployees = value;
+                    });
                   },
                 ),
 

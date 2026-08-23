@@ -33,7 +33,7 @@ class _RegistrationPaymentScreenState extends State<RegistrationPaymentScreen> {
       decimalSeparator: '.',
       includeSymbol: true,
       symbolSeparator: ' ',
-      locale: const Locale('En', 'en'),
+      locale: const Locale('en', 'US'),
       thousandSeparator: ',',
     ),
   );
@@ -45,7 +45,7 @@ class _RegistrationPaymentScreenState extends State<RegistrationPaymentScreen> {
   }
 
   Future<void> _initCurrency() async {
-    await determinePosition();
+    position = await determinePosition();
 
     if (position != null) {
       final currencyData = await geoCurrencies.getCurrencyDataByCoordinate(
@@ -55,27 +55,6 @@ class _RegistrationPaymentScreenState extends State<RegistrationPaymentScreen> {
       setState(() {
         currentCurrency = currencyData?.symbol;
       });
-    }
-  }
-
-  Future<void> determinePosition() async {
-    try {
-      // request for location first
-      LocationPermission permission = await Geolocator.requestPermission();
-
-      // check if location was allowed
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        position = null;
-        return;
-      }
-
-      // get location
-      position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-      );
-    } catch (e) {
-      position = null;
     }
   }
 
@@ -442,7 +421,7 @@ Future<Position?> determinePosition() async {
   serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
   if (!serviceEnabled) {
-    print('Location services are disabled.');
+    debugPrint('Location services are disabled.');
     return null;
   }
 
@@ -453,13 +432,13 @@ Future<Position?> determinePosition() async {
     permission = await Geolocator.requestPermission();
 
     if (permission == LocationPermission.denied) {
-      print('Location permissions are denied');
+      debugPrint('Location permissions are denied');
       return null;
     }
   }
 
   if (permission == LocationPermission.deniedForever) {
-    print('Location permissions are permanently denied');
+    debugPrint('Location permissions are permanently denied');
     return null;
   }
 

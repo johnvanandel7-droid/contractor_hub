@@ -1,6 +1,9 @@
 import 'package:contractor_hub/screens/register_screen.dart';
-import 'package:contractor_hub/screens/welcome%20screen.dart';
+import 'package:contractor_hub/screens/registration_payment_screen.dart';
+import 'package:contractor_hub/screens/welcome_screen.dart';
 import 'package:contractor_hub/screens/to_do_list.dart';
+import 'package:contractor_hub/screens/your_employees_screen.dart';
+import 'package:contractor_hub/screens/your_jobs_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter/material.dart';
@@ -35,6 +38,9 @@ void main() async {
         '/clockInOut': (context) => ClockInOut(),
         '/toDoList': (context) => ToDoList(),
         '/registerScreen': (context) => RegistrationScreen(),
+        '/registrationPayment': (context) => RegistrationPaymentScreen(),
+        '/yourEmployees': (context) => YourEmployeesScreen(),
+        '/yourJobs': (context) => YourJobsScreen(),
       },
     ),
   );
