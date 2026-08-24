@@ -9,6 +9,20 @@ const kInvalidLogin = TextStyle(
   letterSpacing: 2.0,
 );
 
+const kboxDecoration = BoxDecoration(
+  color: Color(0xFF2C3E50),
+  borderRadius: BorderRadius.all(Radius.circular(15)),
+  boxShadow: [
+    BoxShadow(
+      color: Color(0x1A000000),       // soft black 10% opacity
+      blurRadius: 12,
+      offset: Offset(0, 6),
+      spreadRadius: 0,
+    ),
+  ],
+  border: Border(top:BorderSide(color: Colors.lightBlue), right: BorderSide(color: Colors.lightBlue), left: BorderSide(color: Colors.lightBlue), bottom: BorderSide(color: Colors.lightBlue), )
+);
+
 const kInputDecoration = InputDecoration(
   hintText: 'Enter your password.',
   hintStyle: TextStyle(color: Colors.grey),

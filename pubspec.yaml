@@ -25,7 +25,7 @@ dependencies:
   provider: ^6.1.5
 
   # Payment Processing
-  flutter_stripe: ^12.6.0
+  flutter_stripe: ^14.0.0
 
   # location
   geolocator: ^14.0.2

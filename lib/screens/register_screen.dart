@@ -1,6 +1,7 @@
 import 'package:contractor_hub/constants.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
@@ -20,35 +21,70 @@ class RegistrationScreen extends StatefulWidget {
 class _RegistrationScreenState extends State<RegistrationScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   bool showSpinner = false;
+  bool loadingCompanies = true;
   String? email;
   String? password;
   String? confirmPassword;
-  bool allowedEntry = false;
   String deniedEntryReason = '';
   bool isEmployee = true;
   String? numberOfEmployees;
   TextEditingController companyNameController = TextEditingController();
 
+  // Companies pulled live from Firestore. An "employee" registration is
+  // only allowed to pick one of these — never free-text a company name.
+  List<Map<String, dynamic>> joinableCompanies = [];
+  String? selectedCompanyId;
+
+  String companyPaymentPlan = 'small';
+  int numberOfAddableEmployees = 10;
+  bool smallPaymentCompany = true;
+  bool mediumPaymentCompany = false;
+  bool largePaymentCompany = false;
+
   @override
   void initState() {
     super.initState();
-    // Check if this is a free trial registration
-    _checkRegistrationMode();
+    _getJoinableCompanies();
   }
 
-  void _checkRegistrationMode() {
-    // Determine if user came from payment (paid) or free trial
-    // This can be tracked via navigation arguments
+  @override
+  void dispose() {
+    companyNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _getJoinableCompanies() async {
+    setState(() => loadingCompanies = true);
+    try {
+      final companySnapshots = await _firestore.collection('companies').get();
+
+      // convert documents into list of  maps
+      final companies = companySnapshots.docs
+          .map((doc) => {'id': doc.id, ...doc.data()})
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        joinableCompanies = companies;
+        loadingCompanies = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading companies: $e');
+      if (!mounted) return;
+      setState(() {
+        joinableCompanies = [];
+        loadingCompanies = false;
+      });
+    }
   }
 
   Future<void> _registerUser() async {
-    // Clear previous error
     setState(() {
       deniedEntryReason = '';
       showSpinner = true;
     });
 
-    // Validation checks
+    // --- Basic field validation ---
     if (email == null ||
         email!.trim().isEmpty ||
         password == null ||
@@ -62,10 +98,18 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return;
     }
 
+    if (!_isValidEmail(email!)) {
+      setState(() {
+        deniedEntryReason = 'Please enter a valid email address';
+        showSpinner = true;
+      });
+      return;
+    }
+
     if (password != confirmPassword) {
       setState(() {
         deniedEntryReason = 'Passwords do not match';
-        showSpinner = false;
+        showSpinner = true;
       });
       return;
     }
@@ -73,21 +117,86 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (password!.length < 6) {
       setState(() {
         deniedEntryReason = 'Password must be at least 6 characters';
-        showSpinner = false;
+        showSpinner = true;
       });
       return;
     }
 
-    if (!_isValidEmail(email!)) {
-      setState(() {
-        deniedEntryReason = 'Please enter a valid email address';
-        showSpinner = false;
-      });
-      return;
+    Map<String, dynamic>? selectedCompany;
+
+    if (isEmployee) {
+      // Employee must pick a real, existing company that still has room.
+      if (selectedCompanyId == null) {
+        setState(() {
+          deniedEntryReason = 'Please select the company you work for';
+          showSpinner = false;
+        });
+        return;
+      }
+
+      final matches = joinableCompanies.where(
+        (c) => c['id'] == selectedCompanyId,
+      );
+      if (matches.isEmpty) {
+        setState(() {
+          deniedEntryReason =
+              'That company could not be found. Please refresh and try again.';
+          showSpinner = false;
+        });
+        return;
+      }
+      selectedCompany = matches.first;
+
+      final currentEmployees =
+          (selectedCompany['numberOfEmployees'] ?? 0) as int;
+      final maxEmployees =
+          (selectedCompany['numberOfAddableEmployees'] ?? 0) as int;
+
+      if (currentEmployees >= maxEmployees) {
+        setState(() {
+          deniedEntryReason =
+              'This company has reached its employee limit. Ask the owner to upgrade their plan.';
+          showSpinner = false;
+        });
+        return;
+      }
+    } else {
+      // Owner/foreman is creating a brand new company.
+      if (companyNameController.text.trim().isEmpty) {
+        setState(() {
+          deniedEntryReason = 'Please enter a company name';
+          showSpinner = false;
+        });
+        return;
+      }
+
+      final nameToCheck = companyNameController.text.trim().toLowerCase();
+      final alreadyExists = joinableCompanies.any(
+        (c) =>
+            (c['companyName'] ?? '').toString().trim().toLowerCase() ==
+            nameToCheck,
+      );
+      if (alreadyExists) {
+        setState(() {
+          deniedEntryReason =
+              'A company with that name already exists. Choose a different name or join it as an employee.';
+          showSpinner = false;
+        });
+        return;
+      }
+
+      if (numberOfEmployees != null &&
+          numberOfEmployees!.isNotEmpty &&
+          int.tryParse(numberOfEmployees!) == null) {
+        setState(() {
+          deniedEntryReason = 'Please enter a valid number of employees';
+          showSpinner = false;
+        });
+        return;
+      }
     }
 
     try {
-      // Create user in Firebase Authentication
       final UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(
             email: email!.trim().toLowerCase(),
@@ -96,7 +205,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       final String uid = userCredential.user!.uid;
 
-      // Get FCM token for push notifications
       String? token;
       try {
         token = await _messaging.getToken();
@@ -104,9 +212,49 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         debugPrint('Error getting FCM token: $e');
       }
 
-      // Create user document in Firestore
-      final docRef = _firestore.collection('users').doc(uid);
+      late final String finalCompanyId;
+      late final String finalCompanyName;
 
+      if (isEmployee) {
+        finalCompanyId = selectedCompany!['id'] as String;
+        finalCompanyName = selectedCompany['companyName'] as String;
+
+        // Bump the employee count inside a transaction so two people
+        // joining at the same moment can't both slip past the limit.
+        final companyRef = _firestore
+            .collection('companies')
+            .doc(finalCompanyId);
+        await _firestore.runTransaction((transaction) async {
+          final snapshot = await transaction.get(companyRef);
+          if (!snapshot.exists) {
+            throw Exception('That company no longer exists.');
+          }
+          final current = (snapshot.data()?['numberOfEmployees'] ?? 0) as int;
+          final max =
+              (snapshot.data()?['numberOfAddableEmployees'] ?? 0) as int;
+          if (current >= max) {
+            throw Exception('This company has reached its employee limit.');
+          }
+          transaction.update(companyRef, {
+            'numberOfEmployees': current + 1,
+            'employeeIds': FieldValue.arrayUnion([uid]),
+          });
+        });
+      } else {
+        final newCompanyRef = await _firestore.collection('companies').add({
+          'companyName': companyNameController.text.trim(),
+          'bossId': uid,
+          'createdAt': FieldValue.serverTimestamp(),
+          'numberOfEmployees': 0,
+          'numberOfAddableEmployees': numberOfAddableEmployees,
+          'companyPaymentPlan': companyPaymentPlan,
+          'employeeIds': [],
+        });
+        finalCompanyId = newCompanyRef.id;
+        finalCompanyName = companyNameController.text.trim();
+      }
+
+      final docRef = _firestore.collection('users').doc(uid);
       final doc = await docRef.get();
       if (!doc.exists) {
         await docRef.set({
@@ -115,14 +263,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           'createdAt': FieldValue.serverTimestamp(),
           'phoneToken': token ?? '',
           'isEmployee': isEmployee,
-          'companyName': companyNameController.text,
-          if (isEmployee == false) 'numberOfEmployees': numberOfEmployees,
+          'companyId': finalCompanyId,
+          'companyName': finalCompanyName,
+          if (!isEmployee) 'numberOfEmployees': numberOfEmployees,
         });
       }
 
       if (!mounted) return;
 
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Account created successfully!'),
@@ -131,9 +279,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         ),
       );
 
-      // Navigate to home
       Navigator.pushNamedAndRemoveUntil(context, '/homePage', (route) => false);
     } on FirebaseAuthException catch (e) {
+      debugPrint('FirebaseAuthException: ${e.code}');
+      debugPrint('error Message: ${e.message}');
       String message;
 
       switch (e.code) {
@@ -157,8 +306,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       }
 
       setState(() => deniedEntryReason = message);
-    } catch (e) {
-      setState(() => deniedEntryReason = 'Unexpected error: $e');
+    } catch (e, stack) {
+      debugPrint('Unexpected error: $e');
+      debugPrint('Stack trace: $stack');
+      setState(
+        () => deniedEntryReason = e.toString().replaceFirst('Exception: ', ''),
+      );
     } finally {
       if (mounted) {
         setState(() => showSpinner = false);
@@ -276,65 +429,206 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                const Text('Company name'),
-
-                TextField(
-                  controller: companyNameController,
-                  decoration: kInputDecoration.copyWith(
-                    hintText: 'company name',
+                Padding(
+                  padding: const EdgeInsets.all(10.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              isEmployee = true;
+                              deniedEntryReason = '';
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isEmployee
+                                ? Colors.blue
+                                : Colors.grey[300],
+                            foregroundColor: isEmployee
+                                ? Colors.white
+                                : Colors.black87,
+                          ),
+                          child: Text('Employee'),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              isEmployee = false;
+                              deniedEntryReason = '';
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isEmployee
+                                ? Colors.blue
+                                : Colors.grey[300],
+                            foregroundColor: isEmployee
+                                ? Colors.white
+                                : Colors.black87,
+                          ),
+                          child: Text('Owner/boss'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-
-                const SizedBox(height: 5),
-
-                Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          isEmployee = true;
-                        });
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isEmployee == false
-                            ? Colors.white70
-                            : Colors.grey,
-                      ),
-                      child: Text('Employee'),
-                    ),
-                    Spacer(),
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          isEmployee = false;
-                        });
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isEmployee == true
-                            ? Colors.white70
-                            : Colors.grey,
-                      ),
-                      child: Text('Owner/foreman'),
-                    ),
-                  ],
-                ),
-                if (isEmployee == false) Text('Number of employees'),
-                TextField(
-                  decoration: kInputDecoration.copyWith(
-                    hintText: 'number of employees',
+                if (isEmployee) ...[
+                  const Text(
+                    'Company',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
-                  onChanged: (value) {
-                    setState(() {
-                      if (value.isNotEmpty && int.tryParse(value) == null) {
-                        deniedEntryReason = 'invalid number of employees';
-                      } else {
-                        deniedEntryReason = '';
-                      }
-                      numberOfEmployees = value;
-                    });
-                  },
-                ),
-
+                  const SizedBox(height: 8),
+                  if (loadingCompanies)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (joinableCompanies.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'No companies found. Ask your employer too register first or refresh.',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _getJoinableCompanies,
+                            icon: Icon(Icons.refresh),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedCompanyId,
+                            decoration: kInputDecoration.copyWith(
+                              hintText: 'select your company',
+                            ),
+                            items: joinableCompanies.map((c) {
+                              final current =
+                                  (c['numberOfEmployees'] ?? 0) as int;
+                              final max =
+                                  (c['numberOfAddableEmployees'] ?? 0) as int;
+                              final full = current >= max;
+                              return DropdownMenuItem<String>(
+                                value: c['id'] as String,
+                                enabled: !full,
+                                child: Text(
+                                  full
+                                      ? '${c['companyName']} (full)'
+                                      : '${c['companyName']}',
+                                  style: TextStyle(
+                                    color: full ? Colors.grey : Colors.black,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) => setState(() {
+                              selectedCompanyId = value;
+                            }),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 16),
+                ],
+                // ---- Owner: creating a brand new company ----
+                if (!isEmployee) ...[
+                  const Text(
+                    'Company name',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: companyNameController,
+                    decoration: kInputDecoration.copyWith(
+                      hintText: 'company name',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Number of employees'),
+                  TextField(
+                    decoration: kInputDecoration.copyWith(
+                      hintText: 'number of employees',
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        if (value.isNotEmpty && int.tryParse(value) == null) {
+                          deniedEntryReason = 'invalid number of employees';
+                        } else {
+                          deniedEntryReason = '';
+                        }
+                        numberOfEmployees = value;
+                      });
+                    },
+                  ),
+                  SizedBox(height: 15),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _PlanCard(
+                          title: 'Small business',
+                          price: '\$20 CAD',
+                          description:
+                              'Meant for small companies with a max of 10 employees with the app',
+                          selected: smallPaymentCompany,
+                          onTap: () => setState(() {
+                            smallPaymentCompany = true;
+                            mediumPaymentCompany = false;
+                            largePaymentCompany = false;
+                            companyPaymentPlan = 'small';
+                            numberOfAddableEmployees = 10;
+                          }),
+                        ),
+                      ),
+                      Expanded(
+                        child: _PlanCard(
+                          title: 'Enterprise',
+                          price: '\$40 CAD',
+                          description:
+                              'Meant for large companies with a max of 100 employees with the app',
+                          selected: mediumPaymentCompany,
+                          onTap: () => setState(() {
+                            smallPaymentCompany = false;
+                            mediumPaymentCompany = true;
+                            largePaymentCompany = false;
+                            companyPaymentPlan = 'medium';
+                            numberOfAddableEmployees = 100;
+                          }),
+                        ),
+                      ),
+                      Expanded(
+                        child: _PlanCard(
+                          title: 'Large Enterprise',
+                          price: '\$100 CAD',
+                          description:
+                              'Meant for large companies with unlimited employees',
+                          selected: largePaymentCompany,
+                          onTap: () => setState(() {
+                            smallPaymentCompany = false;
+                            mediumPaymentCompany = false;
+                            largePaymentCompany = true;
+                            companyPaymentPlan = 'large';
+                            numberOfAddableEmployees = 1000000000;
+                          }),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                SizedBox(height: 20),
                 // Error message
                 if (deniedEntryReason.isNotEmpty)
                   Container(
@@ -380,6 +674,57 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   ],
                 ),
                 const SizedBox(height: 60),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanCard extends StatelessWidget {
+  final String title;
+  final String price;
+  final String description;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PlanCard({
+    required this.title,
+    required this.price,
+    required this.description,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Container(
+          decoration: kboxDecoration.copyWith(
+            color: selected ? Colors.blue[700] : Colors.blue[400],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 16, color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                Text(price, style: const TextStyle(color: Colors.white)),
+                const SizedBox(height: 5),
+                Text(
+                  description,
+                  style: const TextStyle(fontSize: 11, color: Colors.white70),
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
