@@ -46,7 +46,7 @@ class _HomePageState extends State<HomePage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (isEmployee == false)
+                  if (isEmployee == false) ...[
                     ReusableButton(
                       buttonText: 'Your Workers',
                       onPress: () {
@@ -57,7 +57,6 @@ class _HomePageState extends State<HomePage> {
                       buttonColor: Colors.yellow,
                       buttonPadding: 8,
                     ),
-                  if (isEmployee == false)
                     ReusableButton(
                       buttonText: 'Your Jobs',
                       onPress: () {
@@ -68,6 +67,7 @@ class _HomePageState extends State<HomePage> {
                       buttonColor: Colors.grey,
                       buttonPadding: 8,
                     ),
+                  ],
                   ReusableButton(
                     buttonText: 'Clock In / Out',
                     onPress: () {
