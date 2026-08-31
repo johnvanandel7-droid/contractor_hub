@@ -52,7 +52,7 @@ class _HomePageState extends State<HomePage> {
                       onPress: () {
                         Navigator.pushNamed(context, '/yourEmployees');
                       },
-                      buttonHeight: 20,
+                      buttonHeight: 40,
                       buttonWidth: double.infinity,
                       buttonColor: Colors.yellow,
                       buttonPadding: 8,
@@ -62,7 +62,7 @@ class _HomePageState extends State<HomePage> {
                       onPress: () {
                         Navigator.pushNamed(context, '/yourJobs');
                       },
-                      buttonHeight: 20,
+                      buttonHeight: 40,
                       buttonWidth: double.infinity,
                       buttonColor: Colors.grey,
                       buttonPadding: 8,
@@ -73,7 +73,7 @@ class _HomePageState extends State<HomePage> {
                     onPress: () {
                       Navigator.pushNamed(context, '/clockInOut');
                     },
-                    buttonHeight: 20,
+                    buttonHeight: 40,
                     buttonWidth: double.infinity,
                     buttonColor: Colors.purple,
                     buttonPadding: 8,
@@ -83,9 +83,9 @@ class _HomePageState extends State<HomePage> {
                     onPress: () {
                       Navigator.pushNamed(context, '/toDoList');
                     },
-                    buttonHeight: 20,
+                    buttonHeight: 40,
                     buttonWidth: double.infinity,
-                    buttonColor: Colors.black87,
+                    buttonColor: Colors.blue,
                     buttonPadding: 8,
                   ),
                   ReusableButton(
@@ -93,7 +93,7 @@ class _HomePageState extends State<HomePage> {
                     onPress: () {
                       Navigator.pushNamed(context, '/constructionImages');
                     },
-                    buttonHeight: 20,
+                    buttonHeight: 40,
                     buttonWidth: double.infinity,
                     buttonColor: Colors.blue,
                     buttonPadding: 8,

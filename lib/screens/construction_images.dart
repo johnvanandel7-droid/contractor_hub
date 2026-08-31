@@ -1,5 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/constants.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+final firestore = FirebaseFirestore.instance;
 
 class ConstructionImages extends StatefulWidget {
   const ConstructionImages({super.key});
@@ -11,16 +15,40 @@ class ConstructionImages extends StatefulWidget {
 class _ConstructionImagesState extends State<ConstructionImages> {
   int selectedJob = 1;
   List<JobPhotoPicker> jobs = [];
+  final ImagePicker _picker = ImagePicker();
+  List<XFIle> images = [];
 
   Future<void> addimages() async {
-    await showDialog(
+    if (images.length > 1000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You have surpassed the max ammount of construction images available',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // show a nice dialog to let user choose camera or gallery
+    final ImageSource? source = await showDialog<ImageSource>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('choose photo adding method'),
         content: Row(
           children: [
-            MaterialButton(onPressed: () {}, child: Text('gallery')),
-            MaterialButton(onPressed: () {}, child: Text('camera')),
+            MaterialButton(
+              onPressed: () {
+                Navigator.pop(context, ImageSource.gallery);
+              },
+              child: Text('gallery'),
+            ),
+            MaterialButton(
+              onPressed: () {
+                Navigator.pop(context, ImageSource.camera);
+              },
+              child: Text('camera'),
+            ),
           ],
         ),
         actions: [
@@ -33,6 +61,19 @@ class _ConstructionImagesState extends State<ConstructionImages> {
         ],
       ),
     );
+
+    // If user cancelled the dialog
+    if (source == null) return;
+
+    try {
+      final picked = await _picker.pickImage(source: source, imageQuality: 85);
+
+      firestore.collection('jobImages').add(picked);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to pick image')));
+    }
   }
 
   @override

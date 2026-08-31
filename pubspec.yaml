@@ -34,6 +34,9 @@ dependencies:
   # other
   timeago: ^3.7.0
 
+  #images
+  image_picker: ^1.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
