@@ -48,9 +48,9 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   if (isEmployee == false) ...[
                     ReusableButton(
-                      buttonText: 'Your Workers',
+                      buttonText: 'Administrator panel',
                       onPress: () {
-                        Navigator.pushNamed(context, '/yourEmployees');
+                        Navigator.pushNamed(context, '/administratorPanel');
                       },
                       buttonHeight: 40,
                       buttonWidth: double.infinity,
@@ -62,7 +62,7 @@ class _HomePageState extends State<HomePage> {
                       onPress: () {
                         Navigator.pushNamed(context, '/yourJobs');
                       },
-                      buttonHeight: 40,
+                      buttonHeight: 20,
                       buttonWidth: double.infinity,
                       buttonColor: Colors.grey,
                       buttonPadding: 8,

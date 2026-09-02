@@ -1,4 +1,3 @@
-import 'package:contractor_hub/screens/construction_images.dart';
 import 'package:contractor_hub/screens/register_screen.dart';
 import 'package:contractor_hub/screens/registration_payment_screen.dart';
 import 'package:contractor_hub/screens/welcome_screen.dart';
@@ -42,7 +41,6 @@ void main() async {
         '/registrationPayment': (context) => RegistrationPaymentScreen(),
         '/yourEmployees': (context) => YourEmployeesScreen(),
         '/yourJobs': (context) => YourJobsScreen(),
-        '/constructionImages': (context) => ConstructionImages(),
       },
     ),
   );
