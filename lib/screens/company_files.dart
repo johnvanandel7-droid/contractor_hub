@@ -10,8 +10,6 @@ class CompanyFiles extends StatefulWidget {
 class _CompanyFilesState extends State<CompanyFiles> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body:
-    );
+    return Scaffold(body: Column(children: [Text('Company Files')]));
   }
 }
