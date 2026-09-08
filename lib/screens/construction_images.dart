@@ -17,11 +17,11 @@ class ConstructionImages extends StatefulWidget {
 }
 
 class _ConstructionImagesState extends State<ConstructionImages> {
-  int selectedJob = 1;
-  List<JobPhotoPicker> jobs = [];
+  String? selectedJobId;
+
   final ImagePicker _picker = ImagePicker();
   List<XFile> images = [];
-  TextEditingController newJobNameController = TextEditingController();
+  final TextEditingController newJobNameController = TextEditingController();
 
   String? companyId;
   String? companyPaymentPlan;
@@ -32,6 +32,12 @@ class _ConstructionImagesState extends State<ConstructionImages> {
   void initState() {
     super.initState();
     getCompanyInfo();
+  }
+
+  @override
+  void dispose() {
+    newJobNameController.dispose();
+    super.dispose;
   }
 
   Future<void> getCompanyInfo() async {
@@ -107,7 +113,7 @@ class _ConstructionImagesState extends State<ConstructionImages> {
     return countSnapshot.count ?? 0;
   }
 
-  Future<void> addimages() async {
+  Future<void> addImages({required String jobId}) async {
     if (loadingCompanyInfo) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -186,7 +192,7 @@ class _ConstructionImagesState extends State<ConstructionImages> {
 
       await firestore.collection('jobImages').add({
         'companyId': companyId,
-        'jobId': selectedJob,
+        'jobId': jobId,
         'imagePath': picked.path,
         'uploadedAt': FieldValue.serverTimestamp(),
         'uploadedBy': auth.currentUser?.uid,
@@ -199,35 +205,64 @@ class _ConstructionImagesState extends State<ConstructionImages> {
   }
 
   Future<void> addNewJob() async {
+    if (companyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not determine your company')),
+      );
+      return;
+    }
+
+    newJobNameController.clear();
+
     await showBottomSheet(
       context: context,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
       ),
-      builder: (context) {
-        return SingleChildScrollView(
-          child: Column(
-            children: [
-              Text('Add Job', style: TextStyle(fontSize: 20)),
-              SizedBox(height: 15),
-              TextField(
-                decoration: kInputDecoration.copyWith(hintText: 'Name'),
-                controller: newJobNameController,
-              ),
-              SizedBox(height: 15),
-              MaterialButton(
-                onPressed: () async {
-                  await firestore.collection('JobImages').doc().add({
-                    'name': newJobNameController,
-                    'companyId': companyId,
-                    'createdAt': Timestamp.now(),
-                    'jobImages': [],
-                  });
-                  Navigator.pop(context);
-                },
-                child: Text('Save Job'),
-              ),
-            ],
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Add Job', style: TextStyle(fontSize: 20)),
+                SizedBox(height: 15),
+                TextField(
+                  decoration: kInputDecoration.copyWith(hintText: 'Name'),
+                  controller: newJobNameController,
+                ),
+                SizedBox(height: 15),
+                MaterialButton(
+                  color: Colors.blue,
+                  onPressed: () async {
+                    final jobName = newJobNameController.text.trim();
+                    if (jobName.isEmpty) return;
+
+                    try {
+                      await firestore.collection('jobs').add({
+                        'jobName': jobName,
+                        'companyId': companyId,
+                        'createdAt': FieldValue.serverTimestamp(),
+                        'jobImages': [],
+                      });
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to create a Job $e')),
+                      );
+                      return;
+                    }
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  },
+                  child: Text('Save Job'),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -238,26 +273,52 @@ class _ConstructionImagesState extends State<ConstructionImages> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Construction Images', style: TextStyle(fontSize: 20)),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () {},
-                child: Container(
-                  decoration: kboxDecoration,
-                  child: Column(
-                    children: [
-                      SizedBox(height: 10),
-                      Text('Add Job', style: TextStyle(fontSize: 15)),
-                      Icon(Icons.add),
-                    ],
-                  ),
-                ),
-              ),
-              ...jobs,
-            ],
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Text('Construction Images', style: TextStyle(fontSize: 20)),
           ),
+          if (loadingCompanyInfo)
+            const Expanded(child: CircularProgressIndicator())
+          else if (companyId == null)
+            const Expanded(
+              child: Center(child: Text('Could not determine your company')),
+            )
+          else
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: GestureDetector(
+                      onTap: addNewJob,
+                      child: Container(
+                        decoration: kboxDecoration,
+                        padding: const EdgeInsets.all(8),
+                        child: const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(height: 10),
+                            Text('Add Job', style: TextStyle(fontSize: 15)),
+                            Icon(Icons.add),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: JobsAndImagesDisplay(
+                      companyId: companyId!,
+                      selectedJobId: selectedJobId,
+                      onJobSelected: (id) => setState(() => selectedJobId = id),
+                      onAddImage: (id) => addImages(jobId: id),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -265,6 +326,7 @@ class _ConstructionImagesState extends State<ConstructionImages> {
 }
 
 class JobPhotoPicker extends StatefulWidget {
+  final String jobId;
   final String jobName;
   final Color? color;
   final VoidCallback onSelection;
@@ -276,6 +338,7 @@ class JobPhotoPicker extends StatefulWidget {
     required this.color,
     required this.onSelection,
     required this.onTap,
+    required this.jobId,
   });
 
   @override
@@ -284,21 +347,57 @@ class JobPhotoPicker extends StatefulWidget {
 
 class _JobPhotoPickerState extends State<JobPhotoPicker> {
   Future<void> _editJob(String jobId) async {
+    final TextEditingController editController = TextEditingController(
+      text: widget.jobName,
+    );
     await showBottomSheet(
       context: context,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
       ),
-      builder: (context) {
-        return SingleChildScrollView(
-          child: Column(
-            children: [
-              Text('Edit Job', style: TextStyle(fontSize: 20)),
-              SizedBox(height: 15),
-              TextField(
-                decoration: kInputDecoration.copyWith(hintText: 'New Name'),
-              ),
-            ],
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Edit Job', style: TextStyle(fontSize: 20)),
+                const SizedBox(height: 15),
+                TextField(
+                  controller: editController,
+                  decoration: kInputDecoration.copyWith(hintText: 'New Name'),
+                ),
+                const SizedBox(height: 15),
+                MaterialButton(
+                  color: Colors.blue,
+                  onPressed: () async {
+                    final newName = editController.text.trim();
+                    if (newName.isEmpty) return;
+
+                    try {
+                      await firestore
+                          .collection('jobs')
+                          .doc(widget.jobId)
+                          .update({'jobName': newName});
+                    } catch (e) {
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        SnackBar(content: Text('Failed to update job: $e')),
+                      );
+                      return;
+                    }
+
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -315,23 +414,26 @@ class _JobPhotoPickerState extends State<JobPhotoPicker> {
           padding: const EdgeInsets.all(8.0),
           child: Column(
             children: [
-              Text(widget.jobName, style: TextStyle(fontSize: 20)),
-              SizedBox(height: 8),
+              Text(widget.jobName, style: const TextStyle(fontSize: 20)),
+              const SizedBox(height: 8),
               Row(
                 children: [
-                  Spacer(),
+                  const Spacer(),
                   IconButton(
                     onPressed: () {
-                      _editJob();
+                      _editJob;
                     },
-                    icon: Icon(Icons.edit),
+                    icon: const Icon(Icons.edit),
                   ),
-                  Spacer(),
-                  IconButton(onPressed: widget.onTap, icon: Icon(Icons.add)),
-                  Spacer(),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: widget.onTap,
+                    icon: const Icon(Icons.add),
+                  ),
+                  const Spacer(),
                   IconButton(
                     onPressed: widget.onSelection,
-                    icon: Icon(Icons.arrow_downward),
+                    icon: const Icon(Icons.arrow_downward),
                   ),
                 ],
               ),
@@ -343,14 +445,27 @@ class _JobPhotoPickerState extends State<JobPhotoPicker> {
   }
 }
 
+// Streams the jobs belonging to [companyId] and renders one JobPhotoPicker
+// card per job. Selecting a job or tapping its "add" icon calls back up to
+// the parent so it can update selection state / trigger the image picker
+// with the correct jobId.
 class JobsAndImagesDisplay extends StatelessWidget {
   final String companyId;
+  final String? selectedJobId;
+  final ValueChanged<String> onJobSelected;
+  final ValueChanged<String> onAddImage;
 
-  const JobsAndImagesDisplay({super.key, required this.companyId});
+  const JobsAndImagesDisplay({
+    super.key,
+    required this.companyId,
+    required this.selectedJobId,
+    required this.onJobSelected,
+    required this.onAddImage,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
+    return StreamBuilder<QuerySnapshot>(
       stream: services.streamJobImages(companyId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -360,29 +475,43 @@ class JobsAndImagesDisplay extends StatelessWidget {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('No Jobs yet'));
+          return const Center(
+            child: Text('No jobs yet — tap "Add Job" to create one'),
+          );
         }
 
         final docs = snapshot.data!.docs;
-        final List<JobPhotoPicker> jobPhotos = [];
+        final List<Widget> jobPhotos = [];
 
         for (final doc in docs) {
           try {
             final data = doc.data() as Map<String, dynamic>;
-            final jobName = data['jobName'] as String;
+            final jobName = data['jobName'] as String? ?? 'Unnamed job';
+            final jobId = doc.id;
 
             jobPhotos.add(
               JobPhotoPicker(
+                jobId: jobId,
                 jobName: jobName,
-                color: Colors.blueGrey,
-                onSelection: ,
-                onTap: onTap,
+                color: selectedJobId == jobId ? Colors.blue : Colors.blue[700],
+                onSelection: () => onJobSelected(jobId),
+                onTap: () => onAddImage(jobId),
               ),
             );
           } catch (e) {
-            return Center(child: Text('error parsing job $e'));
+            jobPhotos.add(
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text('error parsing job: $e'),
+              ),
+            );
           }
         }
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: jobPhotos),
+        );
       },
     );
   }
