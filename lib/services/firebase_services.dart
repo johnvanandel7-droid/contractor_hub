@@ -131,4 +131,13 @@ class FirebaseServices {
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
+
+  // ================= construction images ===================
+  Stream<QuerySnapshot> streamJobImages(String companyId) {
+    return firebase
+        .collection('jobImages')
+        .where('companyId', isEqualTo: companyId)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
 }

@@ -249,6 +249,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           'numberOfAddableEmployees': numberOfAddableEmployees,
           'companyPaymentPlan': companyPaymentPlan,
           'employeeIds': [],
+          'images': [],
         });
         finalCompanyId = newCompanyRef.id;
         finalCompanyName = companyNameController.text.trim();

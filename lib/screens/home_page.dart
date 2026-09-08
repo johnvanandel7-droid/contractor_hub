@@ -57,16 +57,6 @@ class _HomePageState extends State<HomePage> {
                       buttonColor: Colors.yellow,
                       buttonPadding: 8,
                     ),
-                    ReusableButton(
-                      buttonText: 'Your Jobs',
-                      onPress: () {
-                        Navigator.pushNamed(context, '/yourJobs');
-                      },
-                      buttonHeight: 20,
-                      buttonWidth: double.infinity,
-                      buttonColor: Colors.grey,
-                      buttonPadding: 8,
-                    ),
                   ],
                   ReusableButton(
                     buttonText: 'Clock In / Out',
