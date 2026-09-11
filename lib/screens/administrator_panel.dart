@@ -23,9 +23,20 @@ class AdministratorPanel extends StatelessWidget {
           ),
           SizedBox(height: 10),
           ReusableButton(
+            buttonText: 'Jobs',
+            onPress: () {
+              Navigator.pushNamed(context, '/yourJobs');
+            },
+            buttonHeight: 50,
+            buttonWidth: double.infinity,
+            buttonColor: Colors.blue,
+            buttonPadding: 10,
+          ),
+          SizedBox(height: 10),
+          ReusableButton(
             buttonText: 'Files',
             onPress: () {
-              Navigator.pushNamed(context, 'yourEmployees');
+              Navigator.pushNamed(context, '/yourFiles');
             },
             buttonHeight: 50,
             buttonWidth: double.infinity,

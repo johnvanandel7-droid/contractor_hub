@@ -1,13 +1,14 @@
 import 'package:contractor_hub/components/reusable_icon_button.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:contractor_hub/providers/auth_provider.dart';
 
 class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
   const AppBarWidget({super.key});
 
   @override
-  Size get preferredSize => const Size.fromHeight(80);
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight + 30);
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +37,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
               ReusableIconButton(
                 onPressed: () async {
                   await context.read<AuthProvider>().signOut();
+                  if (!context.mounted) return;
                   Navigator.pushNamedAndRemoveUntil(
                     context,
                     '/welcomeScreen',

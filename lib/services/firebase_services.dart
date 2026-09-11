@@ -11,6 +11,18 @@ class FirebaseServices {
   FirebaseServices._();
   static final FirebaseServices instance = FirebaseServices._();
 
+  // ─── Convenience ──────────────────────────────────────────────────────────
+
+  String? get currentUid => auth.currentUser?.uid;
+  String? get currentEmail => auth.currentUser?.email?.trim().toLowerCase();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AUTH — sign out (used by app_bar.dart)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Signs the current user out of Firebase Auth.
+  Future<void> signOut() => auth.signOut();
+
   // ---------------- USERS ----------------
 
   /// Returns the user document, or null if it doesn't exist.

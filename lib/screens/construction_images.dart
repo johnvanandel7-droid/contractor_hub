@@ -339,7 +339,6 @@ class JobPhotoPicker extends StatefulWidget {
     required this.color,
     required this.onSelection,
     required this.onTap,
-    required this.jobId,
   });
 
   @override
