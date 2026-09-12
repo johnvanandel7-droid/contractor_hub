@@ -35,8 +35,27 @@ class _HomePageState extends State<HomePage> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
+            // Surface the real error instead of masking it as "could not
+            // load your account" — permission-denied and no-doc-found look
+            // identical otherwise.
+            if (snapshot.hasError) {
+              debugPrint(
+                'getUser failed for uid $currentUserUid: ${snapshot.error}',
+              );
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text('Error loading account: ${snapshot.error}'),
+                ),
+              );
+            }
             if (!snapshot.hasData || snapshot.data == null) {
-              return const Center(child: Text('Could not load your account'));
+              debugPrint('No user document found for uid: $currentUserUid');
+              return const Center(
+                child: Text(
+                  'Could not load your account (no user document found)',
+                ),
+              );
             }
 
             final bool isEmployee =
