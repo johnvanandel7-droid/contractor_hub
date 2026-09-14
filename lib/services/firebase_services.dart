@@ -37,6 +37,44 @@ class FirebaseServices {
     return firebase.collection('users').doc(uid).snapshots();
   }
 
+  Future<String?> getUsersCompanyId(String userId) async {
+    try {
+      final userDoc = await firebase.collection('users').doc(userId).get();
+      final fetchedCompanyId = userDoc.data()?['companyId'] as String?;
+      return fetchedCompanyId;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> getUserEmail() async {
+    try {
+      final currentEmail = auth.currentUser?.email?.toLowerCase();
+
+      if (currentEmail == null) {
+        return null;
+      }
+
+      return currentEmail;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> getUserId() async {
+    try {
+      final currentUserId = auth.currentUser?.uid;
+
+      if (currentUserId == null) {
+        return null;
+      }
+
+      return currentUserId;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // ---------------- JOB SITES ----------------
   // A jobsite is a lat/lng + radius (in meters) that defines the geofence
   // employees must be inside to be considered "at work".
@@ -145,11 +183,34 @@ class FirebaseServices {
   }
 
   // ================= construction images ===================
-  Stream<QuerySnapshot> streamJobImages(String companyId) {
-    return firebase
-        .collection('jobImages')
-        .where('companyId', isEqualTo: companyId)
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+  Stream<QuerySnapshot>? streamJobImages(String companyId) {
+    try {
+      return firebase
+          .collection('jobImages')
+          .where('companyId', isEqualTo: companyId)
+          .orderBy('createdAt', descending: true)
+          .snapshots();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // =============== jobs ==============================
+  Future<Stream<QuerySnapshot<Map<String, dynamic>>>?> getCompanyJobs() async {
+    try {
+      final userId = await getUserId();
+      if (userId == null) return null;
+
+      final companyId = await getUsersCompanyId(userId);
+      if (companyId == null) return null;
+
+      return firebase
+          .collection('jobs')
+          .where('companyId', isEqualTo: companyId)
+          .orderBy('createdAt', descending: true)
+          .snapshots();
+    } catch (e) {
+      return null;
+    }
   }
 }
