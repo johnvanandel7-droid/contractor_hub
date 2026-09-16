@@ -1,3 +1,4 @@
+import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/reusable_button.dart';
 import 'package:flutter/material.dart';
 
@@ -7,9 +8,11 @@ class AdministratorPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBarWidget(),
       body: Column(
         children: [
-          Text('Administrator panel'),
+          SizedBox(height: 10),
+          Text('Administrator panel', style: TextStyle(fontSize: 20)),
           SizedBox(height: 10),
           ReusableButton(
             buttonText: 'Employees',

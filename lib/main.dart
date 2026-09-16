@@ -1,3 +1,4 @@
+import 'package:contractor_hub/screens/administrator_panel.dart';
 import 'package:contractor_hub/screens/company_files.dart';
 import 'package:contractor_hub/screens/expense_tracker.dart';
 import 'package:contractor_hub/screens/register_screen.dart';
@@ -45,6 +46,7 @@ void main() async {
         '/yourJobs': (context) => YourJobsScreen(),
         '/companyFiles': (context) => CompanyFiles(),
         '/expenseTracker': (context) => ExpenseTracker(),
+        '/administratorPanel': (context) => AdministratorPanel(),
       },
     ),
   );

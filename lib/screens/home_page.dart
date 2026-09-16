@@ -97,7 +97,16 @@ class _HomePageState extends State<HomePage> {
                     buttonColor: Colors.blue,
                     buttonPadding: 8,
                   ),
-                  ReusableButton(buttonText: 'Expense tracker', onPress: () {Navigator.pushNamed(context, '/expenseTracker');}, buttonHeight: 40, buttonWidth: double.infinity, buttonColor: Colors.blueGrey, buttonPadding: 8),
+                  ReusableButton(
+                    buttonText: 'Expense tracker',
+                    onPress: () {
+                      Navigator.pushNamed(context, '/expenseTracker');
+                    },
+                    buttonHeight: 40,
+                    buttonWidth: double.infinity,
+                    buttonColor: Colors.blueGrey,
+                    buttonPadding: 8,
+                  ),
                   ReusableButton(
                     buttonText: 'Construction Images',
                     onPress: () {

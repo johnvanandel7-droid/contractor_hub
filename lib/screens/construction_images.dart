@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/constants.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -272,6 +273,7 @@ class _ConstructionImagesState extends State<ConstructionImages> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBarWidget(),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
