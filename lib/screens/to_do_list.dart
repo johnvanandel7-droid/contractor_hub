@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:contractor_hub/components/go_home.dart';
+import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/time_ago.dart';
 import 'package:contractor_hub/constants.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
@@ -113,7 +113,7 @@ class _ToDoListState extends State<ToDoList> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(actions: [GoHomeButton()]),
+      appBar: AppBarWidget(),
       backgroundColor: Colors.blue[200],
       body: _companyName == null
           ? const Center(child: CircularProgressIndicator())

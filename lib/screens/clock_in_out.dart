@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/go_home.dart';
 import 'package:contractor_hub/components/time_ago.dart';
 import 'package:contractor_hub/constants.dart';
@@ -264,13 +265,7 @@ class _ClockInOutState extends State<ClockInOut> {
     final isClockedIn = _activeRecordId != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Clock In / Out',
-          style: kLargeTextSize.copyWith(fontSize: 22),
-        ),
-        actions: [GoHomeButton()],
-      ),
+      appBar: AppBarWidget(),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),

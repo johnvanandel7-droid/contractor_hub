@@ -1,4 +1,4 @@
-import 'package:contractor_hub/constants.dart';
+import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -23,11 +23,7 @@ class _HomePageState extends State<HomePage> {
       return Center(child: Text('User isnt logged in'));
     }
     return Scaffold(
-      appBar: AppBar(
-        shadowColor: Colors.black,
-        elevation: 10,
-        title: Text('Contractor Hub', style: kLargeTextSize),
-      ),
+      appBar: AppBarWidget(),
       body: SafeArea(
         child: FutureBuilder<Map<String, dynamic>?>(
           future: services.getUser(currentUserUid),

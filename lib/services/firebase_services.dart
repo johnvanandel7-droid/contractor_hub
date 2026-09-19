@@ -213,4 +213,18 @@ class FirebaseServices {
       return null;
     }
   }
+
+  // =============== employees ===================
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> streamYourEmployees() async* {
+    if (currentUid == null) return;
+    String? companyId = await getUsersCompanyId(currentUid!);
+    if (companyId == null) return;
+
+    yield* firebase
+        .collection('users')
+        .where('companyId', isEqualTo: companyId)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
 }

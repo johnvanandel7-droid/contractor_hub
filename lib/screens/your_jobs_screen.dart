@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:contractor_hub/components/go_home.dart';
+import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/constants.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -161,10 +161,7 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Your Jobs', style: kLargeTextSize.copyWith(fontSize: 22)),
-        actions: [GoHomeButton()],
-      ),
+      appBar: AppBarWidget(),
       body: _companyName == null
           ? const Center(child: CircularProgressIndicator())
           : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(

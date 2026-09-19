@@ -18,7 +18,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
       centerTitle: true,
       automaticallyImplyLeading: false,
       title: const Text(
-        'Chat Job',
+        'Contractor hub',
         style: TextStyle(fontSize: 20, color: Colors.black),
       ),
       bottom: PreferredSize(
