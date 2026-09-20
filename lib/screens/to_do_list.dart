@@ -93,7 +93,7 @@ class _ToDoListState extends State<ToDoList> {
                   Navigator.pop(context);
                   await firebase.collection('ToDoItems').add({
                     'message': newTaskController.text,
-                    'createdAt': DateTime.now,
+                    'createdAt': FieldValue.serverTimestamp(),
                     'completionDate': _completionDate,
                     'createdBy': _currentUserUid,
                     'companyName': _companyName,
@@ -133,17 +133,22 @@ class _ToDoListState extends State<ToDoList> {
   }
 }
 
-class ToDoListItems extends StatelessWidget {
+class ToDoListItems extends StatefulWidget {
   final String companyName;
 
   const ToDoListItems({super.key, required this.companyName});
 
   @override
+  State<ToDoListItems> createState() => _ToDoListItemsState();
+}
+
+class _ToDoListItemsState extends State<ToDoListItems> {
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: firebase
           .collection('ToDoItems')
-          .where('companyName', isEqualTo: companyName)
+          .where('companyName', isEqualTo: widget.companyName)
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -158,6 +163,9 @@ class ToDoListItems extends StatelessWidget {
         }
         final docs = snapshot.data!.docs;
         final tiles = <ToDoTile>[];
+        setState(() {
+          toDoListLength = docs.length;
+        });
 
         for (final doc in docs) {
           try {

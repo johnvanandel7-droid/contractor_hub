@@ -15,8 +15,18 @@ class ExpenseTracker extends StatefulWidget {
 
 class _ExpenseTrackerState extends State<ExpenseTracker> {
   String? selectedJobId;
+  String? selectedCostCode;
   DateTime selectedDate = DateTime.now();
   final TextEditingController amountController = TextEditingController();
+  List<DropdownMenuItem> costCodes = [
+    DropdownMenuItem(child: Text('Kubota 75')),
+    DropdownMenuItem(child: Text('terex')),
+    DropdownMenuItem(child: Text('mini ex')),
+    DropdownMenuItem(child: Text('jobsite')),
+    DropdownMenuItem(child: Text('time and material')),
+    DropdownMenuItem(child: Text('Kubota 75')),
+    DropdownMenuItem(child: Text('Kubota 75')),
+  ];
 
   late final Future<Stream<QuerySnapshot<Map<String, dynamic>>>?>
   _jobsStreamFuture;
@@ -105,6 +115,10 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
     );
   }
 
+  Widget costCodeDropdown() {
+    return DropdownButton(value: selectedCostCode, icon: const Icon(Icons.arrow_downward), hint: const Text('select a cost code'),borderRadius: BorderRadius.all(Radius.circular(5)),items: , onChanged: onChanged)
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -136,7 +150,7 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
                     ],
                   ),
                   SizedBox(height: 10),
-                  Row(children: [Text('Cost Code:'), SizedBox(width: 4)]),
+                  Row(children: [Text('Cost Code:'), SizedBox(width: 4), costCodeDropdown(), SizedBox(width: 3), IconButton(onPressed: () {}, icon: Icon(Icons.add))]),
                   SizedBox(height: 10),
                   Row(
                     children: [

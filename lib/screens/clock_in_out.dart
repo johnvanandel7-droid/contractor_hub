@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/components/app_bar.dart';
-import 'package:contractor_hub/components/go_home.dart';
 import 'package:contractor_hub/components/time_ago.dart';
 import 'package:contractor_hub/constants.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
@@ -30,8 +29,7 @@ class _ClockInOutState extends State<ClockInOut> {
   String _statusMessage = 'Checking location permissions...';
   List<Map<String, dynamic>> _jobSites = [];
   Map<String, dynamic>? _currentJobSite;
-
-  String get _uid => auth.currentUser!.uid;
+  String _uid = '';
 
   @override
   void initState() {
@@ -47,29 +45,57 @@ class _ClockInOutState extends State<ClockInOut> {
   }
 
   Future<void> _bootstrap() async {
-    final user = await services.getUser(_uid);
+    final uid = auth.currentUser?.uid;
+    if (uid == null || !mounted) return; // or navigate to sign-in
+    _uid = uid;
+
+    final user = await services.getUser(uid);
     if (user == null || !mounted) return;
 
     _companyName = user['companyName'] as String?;
 
     // Watch whether this employee already has an open shift (e.g. they
     // reopened the app while still clocked in).
-    _activeRecordSub = services.activeClockRecord(_uid).listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _activeRecordId = snapshot.docs.isEmpty ? null : snapshot.docs.first.id;
-      });
-    });
+    _activeRecordSub = services
+        .activeClockRecord(uid)
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _activeRecordId = snapshot.docs.isEmpty
+                  ? null
+                  : snapshot.docs.first.id;
+            });
+          },
+          onError: (e) {
+            debugPrint('activeClockRecord error: $e');
+            if (!mounted) {
+              setState(() => _statusMessage = 'Could not load clock status');
+            }
+          },
+        );
 
     if (_companyName != null) {
-      services.jobSitesForCompany(_companyName!).listen((snapshot) {
-        if (!mounted) return;
-        setState(() {
-          _jobSites = snapshot.docs
-              .map((d) => {'id': d.id, ...d.data()})
-              .toList();
-        });
-      });
+      services
+          .jobSitesForCompany(_companyName!)
+          .listen(
+            (snapshot) {
+              if (!mounted) return;
+              setState(() {
+                _jobSites = snapshot.docs
+                    .map((d) => {'id': d.id, ...d.data()})
+                    .toList();
+              });
+            },
+            onError: (e) {
+              debugPrint('error getting jobsites: $e');
+              if (!mounted) {
+                setState(() {
+                  _statusMessage = 'could not load companies';
+                });
+              }
+            },
+          );
     }
 
     await _startLocationWatch();

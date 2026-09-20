@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/time_ago.dart';
 import 'package:contractor_hub/constants.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
@@ -12,10 +13,12 @@ class YourEmployeesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBarWidget(),
       body: Column(
         children: [
           Text('Your Employees', style: TextStyle(fontSize: 20)),
           SizedBox(height: 20),
+          Expanded(child: DisplayEmployeeList()),
         ],
       ),
     );
@@ -47,9 +50,12 @@ class DisplayEmployeeList extends StatelessWidget {
           try {
             final data = doc.data() as Map<String, dynamic>;
             final name = data['name'] as String? ?? 'Unknown';
-            final hiredAt = data['createdAt'] as Timestamp;
+            final hiredAt = data['createdAt'] as Timestamp?;
+            final userId = data['userId'] as String? ?? '';
 
-            employees.add(EmployeeInfoContainer(name: name, hiredAt: hiredAt));
+            employees.add(
+              EmployeeInfoContainer(name: name, hiredAt: hiredAt, uid: userId),
+            );
           } catch (e) {
             return Center(child: Text('Error parsing employees'));
           }
@@ -66,12 +72,14 @@ class DisplayEmployeeList extends StatelessWidget {
 
 class EmployeeInfoContainer extends StatefulWidget {
   final String name;
-  final Timestamp hiredAt;
+  Timestamp? hiredAt;
+  final String uid;
 
-  const EmployeeInfoContainer({
+  EmployeeInfoContainer({
     super.key,
     required this.name,
-    required this.hiredAt,
+    this.hiredAt,
+    required this.uid,
   });
 
   @override
@@ -79,6 +87,64 @@ class EmployeeInfoContainer extends StatefulWidget {
 }
 
 class _EmployeeInfoContainerState extends State<EmployeeInfoContainer> {
+  String? name;
+
+  _editEmployee() async {
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Edit ${widget.name}\'s account'),
+        constraints: BoxConstraints(maxHeight: 400),
+        content: Column(
+          children: [
+            Text('edit name'),
+            TextField(
+              decoration: kInputDecoration.copyWith(hintText: 'New Name'),
+              onChanged: (value) {
+                setState(() {
+                  name = value;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  _confirmDelete() async {
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('confirm delete of ${widget.name}'),
+        constraints: BoxConstraints(maxHeight: 400),
+        content: Column(
+          children: [
+            Text('Delete ${widget.name}'),
+            Row(
+              children: [
+                Spacer(),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: Text('cancel'),
+                ),
+                Spacer(),
+                TextButton(
+                  onPressed: () {
+                    _services.deleteEmployee(widget.uid);
+                  },
+                  child: Text('delete'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -93,7 +159,20 @@ class _EmployeeInfoContainerState extends State<EmployeeInfoContainer> {
                 children: [
                   Text(widget.name),
                   SizedBox(width: 15),
-                  Text(formatTimeAgo(widget.hiredAt)),
+                  Text(formatTimeAgo(widget.hiredAt ?? 'unKnown')),
+                ],
+              ),
+              Row(
+                children: [
+                  Spacer(),
+                  IconButton(onPressed: _editEmployee, icon: Icon(Icons.edit)),
+                  Spacer(),
+                  IconButton(
+                    onPressed: () {
+                      _confirmDelete();
+                    },
+                    icon: Icon(Icons.delete),
+                  ),
                 ],
               ),
             ],

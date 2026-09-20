@@ -227,4 +227,16 @@ class FirebaseServices {
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
+
+  void deleteEmployee(String employeeId) {
+    try {
+      firebase
+          .collection('companies')
+          .id('employeeIds')
+          .where(arrayContains.employeeId)
+          .delete();
+    } catch (e) {
+      print(e);
+    }
+  }
 }
