@@ -259,6 +259,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final doc = await docRef.get();
       if (!doc.exists) {
         await docRef.set({
+          if (isEmployee) 'status': 'pending',
           'userId': uid,
           'userEmail': email!.trim().toLowerCase(),
           'createdAt': FieldValue.serverTimestamp(),
@@ -650,7 +651,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 MaterialButton(
                   onPressed: _registerUser,
                   color: Colors.blue,
-                  child: Text('Create Account'),
+                  child: Text('Send request to join company'),
                 ),
                 const SizedBox(height: 16),
 

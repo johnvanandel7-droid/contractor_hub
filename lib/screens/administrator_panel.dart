@@ -46,6 +46,17 @@ class AdministratorPanel extends StatelessWidget {
             buttonColor: Colors.blue,
             buttonPadding: 10,
           ),
+          SizedBox(height: 10),
+          ReusableButton(
+            buttonText: 'Requests to join company',
+            onPress: () {
+              Navigator.pushNamed(context, '/joinRequests');
+            },
+            buttonHeight: 50,
+            buttonWidth: double.infinity,
+            buttonColor: Colors.blue,
+            buttonPadding: 10,
+          ),
         ],
       ),
     );

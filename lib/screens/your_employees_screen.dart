@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/time_ago.dart';
 import 'package:contractor_hub/constants.dart';
+import 'package:contractor_hub/screens/to_do_list.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:flutter/material.dart';
 
@@ -48,16 +49,16 @@ class DisplayEmployeeList extends StatelessWidget {
 
         for (final doc in docs) {
           try {
-            final data = doc.data() as Map<String, dynamic>;
+            final data = doc.data();
             final name = data['name'] as String? ?? 'Unknown';
             final hiredAt = data['createdAt'] as Timestamp?;
-            final userId = data['userId'] as String? ?? '';
 
             employees.add(
-              EmployeeInfoContainer(name: name, hiredAt: hiredAt, uid: userId),
+              EmployeeInfoContainer(name: name, hiredAt: hiredAt, uid: doc.id),
             );
           } catch (e) {
-            return Center(child: Text('Error parsing employees'));
+            debugPrint('error parsing employees :::::$e');
+            continue;
           }
         }
 
@@ -87,9 +88,9 @@ class EmployeeInfoContainer extends StatefulWidget {
 }
 
 class _EmployeeInfoContainerState extends State<EmployeeInfoContainer> {
-  String? name;
-
   _editEmployee() async {
+    final controller = TextEditingController();
+
     await showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -100,14 +101,35 @@ class _EmployeeInfoContainerState extends State<EmployeeInfoContainer> {
             Text('edit name'),
             TextField(
               decoration: kInputDecoration.copyWith(hintText: 'New Name'),
-              onChanged: (value) {
-                setState(() {
-                  name = value;
-                });
-              },
+              controller: controller,
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: Text('cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isEmpty) return;
+              try {
+                await _services.updateEmployeeName(widget.uid, newName);
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('Failed to update name: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('save'),
+          ),
+        ],
       ),
     );
   }
@@ -132,8 +154,17 @@ class _EmployeeInfoContainerState extends State<EmployeeInfoContainer> {
                 ),
                 Spacer(),
                 TextButton(
-                  onPressed: () {
-                    _services.deleteEmployee(widget.uid);
+                  onPressed: () async {
+                    try {
+                      await _services.deleteEmployee(widget.uid);
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to delete: $e')),
+                        );
+                      }
+                    }
                   },
                   child: Text('delete'),
                 ),
@@ -159,7 +190,11 @@ class _EmployeeInfoContainerState extends State<EmployeeInfoContainer> {
                 children: [
                   Text(widget.name),
                   SizedBox(width: 15),
-                  Text(formatTimeAgo(widget.hiredAt ?? 'unKnown')),
+                  Text(
+                    widget.hiredAt == null
+                        ? 'Unknown'
+                        : formatTimeAgo(widget.hiredAt),
+                  ),
                 ],
               ),
               Row(

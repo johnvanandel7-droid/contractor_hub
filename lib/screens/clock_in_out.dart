@@ -23,7 +23,7 @@ class _ClockInOutState extends State<ClockInOut> {
   StreamSubscription<Position>? _positionSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _activeRecordSub;
 
-  String? _companyName;
+  String? _companyId;
   String? _activeRecordId;
   bool _isInsideGeofence = false;
   String _statusMessage = 'Checking location permissions...';
@@ -52,7 +52,7 @@ class _ClockInOutState extends State<ClockInOut> {
     final user = await services.getUser(uid);
     if (user == null || !mounted) return;
 
-    _companyName = user['companyName'] as String?;
+    _companyId = user['companyId'] as String?;
 
     // Watch whether this employee already has an open shift (e.g. they
     // reopened the app while still clocked in).
@@ -75,9 +75,9 @@ class _ClockInOutState extends State<ClockInOut> {
           },
         );
 
-    if (_companyName != null) {
+    if (_companyId != null) {
       services
-          .jobSitesForCompany(_companyName!)
+          .jobsForCompany(_companyId!)
           .listen(
             (snapshot) {
               if (!mounted) return;
@@ -182,7 +182,7 @@ class _ClockInOutState extends State<ClockInOut> {
     if (isInside && _activeRecordId == null && _currentJobSite != null) {
       final ref = await services.clockIn(
         uid: _uid,
-        companyName: _companyName ?? '',
+        companyName: _companyId ?? '',
         jobSiteId: _currentJobSite!['id'] as String,
         jobSiteName: _currentJobSite!['name'] as String,
       );
@@ -267,7 +267,7 @@ class _ClockInOutState extends State<ClockInOut> {
 
                     await services.addManualTime(
                       uid: _uid,
-                      companyName: _companyName ?? '',
+                      companyName: _companyId ?? '',
                       hours: hours,
                       date: selectedDate,
                       note: noteController.text.trim().isEmpty

@@ -16,7 +16,7 @@ class YourJobsScreen extends StatefulWidget {
 class _YourJobsScreenState extends State<YourJobsScreen> {
   final services = FirebaseServices.instance;
   final auth = FirebaseAuth.instance;
-  String? _companyName;
+  String? _companyId;
 
   @override
   void initState() {
@@ -26,11 +26,11 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
 
   Future<void> _loadCompany() async {
     final user = await services.getUser(auth.currentUser!.uid);
-    if (mounted) setState(() => _companyName = user?['companyName'] as String?);
+    if (mounted) setState(() => _companyId = user?['companyId'] as String?);
   }
 
   Future<void> _openAddJobSiteDialog() async {
-    if (_companyName == null) return;
+    if (_companyId == null) return;
 
     final nameController = TextEditingController();
     final radiusController = TextEditingController(text: '150');
@@ -126,7 +126,7 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
                                 );
 
                             await services.addJobSite(
-                              companyName: _companyName!,
+                              companyId: _companyId!,
                               name: name,
                               latitude: position.latitude,
                               longitude: position.longitude,
@@ -162,10 +162,10 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBarWidget(),
-      body: _companyName == null
+      body: _companyId == null
           ? const Center(child: CircularProgressIndicator())
           : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: services.jobSitesForCompany(_companyName!),
+              stream: services.jobsForCompany(_companyId!),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
@@ -184,7 +184,27 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
                     return Card(
                       child: ListTile(
                         leading: const Icon(Icons.location_on),
-                        title: Text(data['name'] as String? ?? 'Unnamed site'),
+                        title: Row(
+                          children: [
+                            Text(data['name'] as String? ?? 'Unnamed site'),
+                            Spacer(),
+                            IconButton(
+                              onPressed: () {},
+                              icon: Icon(Icons.delete, color: Colors.red),
+                            ),
+                            SizedBox(width: 3),
+                            IconButton(
+                              onPressed: () {
+                                _editJob(
+                                  context,
+                                  data['name'],
+                                  data['companyId'],
+                                );
+                              },
+                              icon: Icon(Icons.edit, color: Colors.green),
+                            ),
+                          ],
+                        ),
                         subtitle: Text(
                           'Radius: ${data['radiusMeters']}m — '
                           '(${(data['latitude'] as num).toStringAsFixed(4)}, '
@@ -202,4 +222,17 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
       ),
     );
   }
+}
+
+void _editJob(context, String jobName, String jobId) async {
+  await showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('edit $jobName job'),
+      content: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(children: [TextField()]),
+      ),
+    ),
+  );
 }

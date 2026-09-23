@@ -79,17 +79,16 @@ class FirebaseServices {
   // A jobsite is a lat/lng + radius (in meters) that defines the geofence
   // employees must be inside to be considered "at work".
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> jobSitesForCompany(
-    String companyName,
-  ) {
+  Stream<QuerySnapshot<Map<String, dynamic>>> jobsForCompany(String companyId) {
     return firebase
         .collection('jobsites')
-        .where('companyName', isEqualTo: companyName)
+        .where('companyId', isEqualTo: companyId)
+        .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
   Future<void> addJobSite({
-    required String companyName,
+    required String companyId,
     required String name,
     required double latitude,
     required double longitude,
@@ -97,13 +96,14 @@ class FirebaseServices {
     required String createdBy,
   }) async {
     await firebase.collection('jobsites').add({
-      'companyName': companyName,
+      'companyId': companyId,
       'name': name,
       'latitude': latitude,
       'longitude': longitude,
       'radiusMeters': radiusMeters,
       'createdBy': createdBy,
       'createdAt': FieldValue.serverTimestamp(),
+      'jobImages': [],
     });
   }
 
@@ -182,38 +182,6 @@ class FirebaseServices {
     });
   }
 
-  // ================= construction images ===================
-  Stream<QuerySnapshot>? streamJobImages(String companyId) {
-    try {
-      return firebase
-          .collection('jobImages')
-          .where('companyId', isEqualTo: companyId)
-          .orderBy('createdAt', descending: true)
-          .snapshots();
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // =============== jobs ==============================
-  Future<Stream<QuerySnapshot<Map<String, dynamic>>>?> getCompanyJobs() async {
-    try {
-      final userId = await getUserId();
-      if (userId == null) return null;
-
-      final companyId = await getUsersCompanyId(userId);
-      if (companyId == null) return null;
-
-      return firebase
-          .collection('jobs')
-          .where('companyId', isEqualTo: companyId)
-          .orderBy('createdAt', descending: true)
-          .snapshots();
-    } catch (e) {
-      return null;
-    }
-  }
-
   // =============== employees ===================
 
   Stream<QuerySnapshot<Map<String, dynamic>>> streamYourEmployees() async* {
@@ -228,15 +196,47 @@ class FirebaseServices {
         .snapshots();
   }
 
-  void deleteEmployee(String employeeId) {
-    try {
-      firebase
-          .collection('companies')
-          .id('employeeIds')
-          .where(arrayContains.employeeId)
-          .delete();
-    } catch (e) {
-      print(e);
-    }
+  Future<void> deleteEmployee(String employeeId) async {
+    final userRef = firebase.collection('users').doc(employeeId);
+    final userDoc = await userRef.get();
+    final companyId = userDoc.data()?['companyId'] as String?;
+
+    await firebase.runTransaction((transaction) async {
+      transaction.delete(userRef);
+      if (companyId != null) {
+        final companyRef = firebase.collection('companies').doc(companyId);
+        transaction.update(companyRef, {
+          'employeeCount': FieldValue.increment(-1),
+        });
+      }
+    });
+  }
+
+  Future<void> updateEmployeeName(String employeeId, String newName) {
+    return firebase.collection('users').doc(employeeId).update({
+      'name': newName,
+    });
+  }
+
+  // ---------------- JOIN REQUESTS ----------------
+
+  /// Pending employees for the current admin's company.
+  Stream<QuerySnapshot<Map<String, dynamic>>> pendingJoinRequests(
+    String companyId,
+  ) {
+    return firebase
+        .collection('users')
+        .where('companyId', isEqualTo: companyId)
+        .where('status', isEqualTo: 'pending')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Future<void> approveJoinRequest(String uid) {
+    return firebase.collection('users').doc(uid).update({'status': 'active'});
+  }
+
+  Future<void> denyJoinRequest(String uid) {
+    return firebase.collection('users').doc(uid).delete();
   }
 }

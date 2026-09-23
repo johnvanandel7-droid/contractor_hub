@@ -1,8 +1,8 @@
-import 'package:contractor_hub/components/app_bar.dart';
-import 'package:contractor_hub/services/firebase_services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../components/reusable_button.dart';
+import 'package:contractor_hub/services/firebase_services.dart';
+import 'package:contractor_hub/components/app_bar.dart';
+import 'package:contractor_hub/components/reusable_button.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,8 +20,9 @@ class _HomePageState extends State<HomePage> {
     final currentUserUid = auth.currentUser?.uid;
 
     if (currentUserUid == null) {
-      return Center(child: Text('User isnt logged in'));
+      return const Scaffold(body: Center(child: Text('User isn\'t logged in')));
     }
+
     return Scaffold(
       appBar: AppBarWidget(),
       body: SafeArea(
@@ -31,9 +32,7 @@ class _HomePageState extends State<HomePage> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-            // Surface the real error instead of masking it as "could not
-            // load your account" — permission-denied and no-doc-found look
-            // identical otherwise.
+
             if (snapshot.hasError) {
               debugPrint(
                 'getUser failed for uid $currentUserUid: ${snapshot.error}',
@@ -45,6 +44,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
             }
+
             if (!snapshot.hasData || snapshot.data == null) {
               debugPrint('No user document found for uid: $currentUserUid');
               return const Center(
@@ -54,14 +54,32 @@ class _HomePageState extends State<HomePage> {
               );
             }
 
-            final bool isEmployee =
-                snapshot.data!['isEmployee'] as bool? ?? true;
+            final user = snapshot.data!;
+            final userStatus = user['status'] as String?;
+
+            // ── Pending check ──────────────────────────────────────────
+            if (userStatus == 'pending') {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Text(
+                    'Your account is pending acceptance from the boss',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 18),
+                  ),
+                ),
+              );
+            }
+
+            // ── Normal home content ────────────────────────────────────
+            final bool isEmployee = user['isEmployee'] as bool? ?? true;
+
             return SingleChildScrollView(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (isEmployee == false) ...[
+                  if (!isEmployee) ...[
                     ReusableButton(
                       buttonText: 'Administrator panel',
                       onPress: () {

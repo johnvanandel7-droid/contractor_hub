@@ -28,13 +28,14 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
     DropdownMenuItem(child: Text('Kubota 75')),
   ];
 
-  late final Future<Stream<QuerySnapshot<Map<String, dynamic>>>?>
+  late final Stream<QuerySnapshot<Map<String, dynamic>>>
   _jobsStreamFuture;
 
   @override
   void initState() {
     super.initState();
-    _jobsStreamFuture = services.getCompanyJobs();
+    Future<String?> companyId = services.getUsersCompanyId(userId)
+    _jobsStreamFuture = services.jobsForCompany(companyId!);
   }
 
   @override
@@ -116,7 +117,16 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
   }
 
   Widget costCodeDropdown() {
-    return DropdownButton(value: selectedCostCode, icon: const Icon(Icons.arrow_downward), hint: const Text('select a cost code'),borderRadius: BorderRadius.all(Radius.circular(5)),items: , onChanged: onChanged)
+    return DropdownButton(
+      value: selectedCostCode,
+      icon: const Icon(Icons.arrow_downward),
+      hint: const Text('select a cost code'),
+      borderRadius: BorderRadius.all(Radius.circular(5)),
+      items: costCodes,
+      onChanged: (value) => setState(() {
+        selectedCostCode = value;
+      }),
+    );
   }
 
   @override
@@ -150,7 +160,15 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
                     ],
                   ),
                   SizedBox(height: 10),
-                  Row(children: [Text('Cost Code:'), SizedBox(width: 4), costCodeDropdown(), SizedBox(width: 3), IconButton(onPressed: () {}, icon: Icon(Icons.add))]),
+                  Row(
+                    children: [
+                      Text('Cost Code:'),
+                      SizedBox(width: 4),
+                      costCodeDropdown(),
+                      SizedBox(width: 3),
+                      IconButton(onPressed: () {}, icon: Icon(Icons.add)),
+                    ],
+                  ),
                   SizedBox(height: 10),
                   Row(
                     children: [
