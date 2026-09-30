@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/constants.dart';
@@ -6,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 final services = FirebaseServices.instance;
+final firestore = FirebaseFirestore.instance;
 
 class ExpenseTracker extends StatefulWidget {
   const ExpenseTracker({super.key});
@@ -19,17 +22,18 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
   String? selectedCostCode;
   DateTime selectedDate = DateTime.now();
   final TextEditingController amountController = TextEditingController();
+  final TextEditingController noteController = TextEditingController();
   String? _companyId;
-  String? PONote;
-  bool? isReimbursable = false;
-  bool? isBillable = false;
-  ImageSource? imageSource;
-  final ImagePicker _picker = ImagePicker();
+  bool isReimbursable = false;
+  bool isBillable = false;
   XFile? pickedImage;
+  bool _submitting = false;
 
-  // NOTE: give each item an explicit `value` or DropdownButton can't match
-  // `selectedCostCode` back to an item, and dedupe the accidental repeats.
-  final List<String> costCodes = const [
+  final ImagePicker _picker = ImagePicker();
+
+  // Not const: the "+" button below lets a user add a custom code for this
+  // session, which needs a growable list.
+  final List<String> costCodes = [
     'Kubota 75',
     'terex',
     'mini ex',
@@ -68,6 +72,7 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
   @override
   void dispose() {
     amountController.dispose();
+    noteController.dispose();
     super.dispose();
   }
 
@@ -80,6 +85,132 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
     );
     if (picked != null) {
       setState(() => selectedDate = picked);
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picked = await _picker.pickImage(source: source, imageQuality: 85);
+      if (picked != null) setState(() => pickedImage = picked);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
+      }
+    }
+  }
+
+  Future<void> _addCustomCostCode() async {
+    final controller = TextEditingController();
+    final newCode = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('Add cost code'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: kInputDecoration.copyWith(
+              hintText: 'e.g. Bobcat rental',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+
+    if (newCode != null && newCode.isNotEmpty && !costCodes.contains(newCode)) {
+      setState(() {
+        costCodes.add(newCode);
+        selectedCostCode = newCode;
+      });
+    }
+  }
+
+  Future<void> _submitPOLog() async {
+    if (_companyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not determine your company')),
+      );
+      return;
+    }
+    if (selectedJobId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a job')));
+      return;
+    }
+    if (selectedCostCode == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a cost code')),
+      );
+      return;
+    }
+    final amount = double.tryParse(amountController.text.trim());
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
+      return;
+    }
+
+    setState(() => _submitting = true);
+    try {
+      await firestore.collection('POlogs').add({
+        'companyId': _companyId,
+        'createdBy': services.currentUid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'costCode': selectedCostCode,
+        'jobId': selectedJobId,
+        'date': Timestamp.fromDate(selectedDate),
+        'amount': amount,
+        'note': noteController.text.trim(),
+        'isReimbursable': isReimbursable,
+        'isBillable': isBillable,
+        // NOTE: this only stores the local device's file path, which won't
+        // resolve on any other device. Wire up Firebase Storage (upload the
+        // file, save the download URL here) before relying on this for
+        // images other users need to see.
+        'imagePath': pickedImage?.path,
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('PO log added')));
+      setState(() {
+        selectedJobId = null;
+        selectedCostCode = null;
+        selectedDate = DateTime.now();
+        amountController.clear();
+        noteController.clear();
+        isReimbursable = false;
+        isBillable = false;
+        pickedImage = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not save PO log: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -108,7 +239,6 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
           );
         }
         if (snapshot.hasError) {
-          print(snapshot.error);
           return Text('Error: ${snapshot.error}');
         }
 
@@ -117,220 +247,609 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
           return const Text('No jobs found');
         }
 
-        return DropdownButton<String>(
-          value: selectedJobId,
-          icon: const Icon(Icons.arrow_downward),
-          hint: const Text('Select a Job'),
-          isExpanded: true,
-          borderRadius: BorderRadius.all(Radius.circular(5)),
-          items: docs.map((doc) {
-            final jobName = doc.data()['name'] as String? ?? 'Unnamed job';
-            return DropdownMenuItem<String>(
-              value: doc.id,
-              child: Text(jobName),
-            );
-          }).toList(),
-          onChanged: (value) {
-            setState(() => selectedJobId = value);
-          },
+        return InputDecorator(
+          decoration: const InputDecoration(
+            labelText: 'Job',
+            border: OutlineInputBorder(),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedJobId,
+              isExpanded: true,
+              hint: const Text('Select a job'),
+              items: docs.map((doc) {
+                final jobName = doc.data()['name'] as String? ?? 'Unnamed job';
+                return DropdownMenuItem<String>(
+                  value: doc.id,
+                  child: Text(jobName),
+                );
+              }).toList(),
+              onChanged: (value) => setState(() => selectedJobId = value),
+            ),
+          ),
         );
       },
     );
   }
 
-  Widget costCodeDropdown() {
-    return DropdownButton<String>(
-      value: selectedCostCode,
-      icon: const Icon(Icons.arrow_downward),
-      hint: const Text('select a cost code'),
-      borderRadius: BorderRadius.all(Radius.circular(5)),
-      items: costCodes
-          .map(
-            (code) => DropdownMenuItem<String>(value: code, child: Text(code)),
-          )
-          .toList(),
-      onChanged: (value) => setState(() {
-        selectedCostCode = value;
-      }),
+  Widget _costCodeDropdown() {
+    return InputDecorator(
+      decoration: const InputDecoration(
+        labelText: 'Cost code',
+        border: OutlineInputBorder(),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedCostCode,
+          isExpanded: true,
+          hint: const Text('Select a cost code'),
+          items: costCodes
+              .map(
+                (code) =>
+                    DropdownMenuItem<String>(value: code, child: Text(code)),
+              )
+              .toList(),
+          onChanged: (value) => setState(() => selectedCostCode = value),
+        ),
+      ),
     );
   }
 
-  void getImages() async {
-    try {
-      final picked = await _picker.pickImage(
-        source: imageSource!,
-        imageQuality: 85,
-      );
-      setState(() {
-        pickedImage = picked;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Faile to pick image')));
-    }
+  Widget _buildCreatePOCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.add_shopping_cart, color: Colors.blue),
+              SizedBox(width: 8),
+              Text(
+                'New PO Log',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildJobDropdown(),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _costCodeDropdown()),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: IconButton(
+                  onPressed: _addCustomCostCode,
+                  icon: const Icon(Icons.add_circle_outline),
+                  tooltip: 'Add cost code',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: _pickDate,
+            icon: const Icon(Icons.calendar_today, size: 18),
+            label: Text(
+              '${selectedDate.month}/${selectedDate.day}/${selectedDate.year}',
+            ),
+            style: OutlinedButton.styleFrom(
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: kInputDecoration.copyWith(
+              labelText: 'Amount (inc. tax)',
+              hintText: '\$1000',
+              prefixIcon: const Icon(Icons.attach_money),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: noteController,
+            maxLines: 2,
+            decoration: kInputDecoration.copyWith(
+              labelText: 'Notes',
+              hintText: 'bought it to fix the skidsteer',
+            ),
+          ),
+          const SizedBox(height: 4),
+          CheckboxListTile(
+            value: isReimbursable,
+            onChanged: (value) =>
+                setState(() => isReimbursable = value ?? false),
+            title: const Text('Reimbursable'),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          ),
+          CheckboxListTile(
+            value: isBillable,
+            onChanged: (value) => setState(() => isBillable = value ?? false),
+            title: const Text('Billable'),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _pickImage(ImageSource.camera),
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Camera'),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () => _pickImage(ImageSource.gallery),
+                icon: const Icon(Icons.image),
+                label: const Text('Gallery'),
+              ),
+            ],
+          ),
+          if (pickedImage != null) ...[
+            const SizedBox(height: 12),
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.file(
+                    File(pickedImage!.path),
+                    height: 120,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: () => setState(() => pickedImage = null),
+                    child: const CircleAvatar(
+                      radius: 12,
+                      backgroundColor: Colors.black54,
+                      child: Icon(Icons.close, size: 14, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 18),
+          ElevatedButton(
+            onPressed: _submitting ? null : _submitPOLog,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: _submitting
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Add PO Log'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBarWidget(),
-      body: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text(
-              '-Create PO-------------------',
-              style: TextStyle(fontSize: 18),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white70,
-                border: Border(),
-                borderRadius: BorderRadius.all(Radius.circular(5)),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Text('Job Name:'),
-                      SizedBox(width: 4),
-                      Expanded(child: _buildJobDropdown()),
-                    ],
-                  ),
-                  SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Text('Cost Code:'),
-                      SizedBox(width: 4),
-                      costCodeDropdown(),
-                      SizedBox(width: 3),
-                      IconButton(onPressed: () {}, icon: Icon(Icons.add)),
-                    ],
-                  ),
-                  SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Text('Date:'),
-                      SizedBox(width: 4),
-                      TextButton(
-                        onPressed: _pickDate,
-                        child: Text(
-                          '${selectedDate.month}/${selectedDate.day}/${selectedDate.year}',
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Text('Amount (inc Tax)'),
-                      SizedBox(width: 4),
-                      Expanded(
-                        child: TextField(
-                          controller: amountController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: kInputDecoration.copyWith(
-                            hintText: '\$1000',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Text('Notes:'),
-                      SizedBox(width: 3),
-                      TextField(
-                        decoration: kInputDecoration.copyWith(
-                          hintText: 'bought it too fix the skidsteer',
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            PONote = value;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: isReimbursable,
-                        onChanged: (value) {
-                          setState(() {
-                            isReimbursable = value;
-                          });
-                        },
-                      ),
-                      SizedBox(width: 1),
-                      Text('Reimbursable'),
-                      SizedBox(width: 5),
-                      Checkbox(
-                        value: isBillable,
-                        onChanged: (value) {
-                          setState(() {
-                            isBillable = value;
-                          });
-                        },
-                      ),
-                      SizedBox(width: 1),
-                      Text('Billable'),
-                    ],
-                  ),
-                  SizedBox(width: 10),
-                  Row(
-                    children: [
-                      Spacer(flex: 2),
-                      IconButton(
-                        icon: Icon(Icons.camera_alt, size: 35),
-                        onPressed: () {
-                          setState(() {
-                            imageSource = ImageSource.camera;
-                          });
-                          getImages();
-                        },
-                      ),
-                      Spacer(flex: 1),
-                      IconButton(
-                        icon: Icon(Icons.image, size: 35),
-                        onPressed: () {
-                          setState(() {
-                            imageSource = ImageSource.gallery;
-                          });
-                          getImages();
-                        },
-                      ),
-                      Spacer(flex: 2),
-                    ],
-                  ),
-
-                  ElevatedButton(
-                    onPressed: () {
-                      firebase.collection('POlogs').add({
-                        'companyId': _companyId,
-                        'createdBy': services.currentUid,
-                        'costCode': selectedCostCode,
-                        'job': selectedJobId,
-                        'date': selectedDate,
-                        'note': PONote,
-                        'images': pickedImage?.path,
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      fixedSize: Size(100, 40),
-                    ),
-                    child: Text('Add'),
+      backgroundColor: Colors.grey[100],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildCreatePOCard(),
+              const SizedBox(height: 24),
+              Row(
+                children: const [
+                  Icon(Icons.receipt_long, size: 20, color: Colors.blueGrey),
+                  SizedBox(width: 6),
+                  Text(
+                    'Past PO Logs',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              if (_companyId == null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    _loadingJobs
+                        ? 'Loading…'
+                        : 'Could not determine your company',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                )
+              else
+                DisplayPOlogs(companyId: _companyId!),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _POLogSortBy { date, job, costCode }
+
+class DisplayPOlogs extends StatefulWidget {
+  final String companyId;
+  const DisplayPOlogs({super.key, required this.companyId});
+
+  @override
+  State<DisplayPOlogs> createState() => _DisplayPOlogsState();
+}
+
+class _DisplayPOlogsState extends State<DisplayPOlogs> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchText = '';
+  _POLogSortBy _sortBy = _POLogSortBy.date;
+  bool _ascending = false; // newest first by default
+
+  // Job names are resolved once up front instead of per-tile, so
+  // searching/sorting doesn't need to wait on a Firestore read per row.
+  Map<String, String> _jobNames = {};
+  bool _loadingJobNames = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadJobNames();
+    _searchController.addListener(() {
+      setState(() => _searchText = _searchController.text.trim().toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadJobNames() async {
+    try {
+      final snapshot = await services.jobsForCompany(widget.companyId).first;
+      if (!mounted) return;
+      setState(() {
+        _jobNames = {
+          for (final doc in snapshot.docs)
+            doc.id: (doc.data()['name'] as String? ?? 'Unnamed job'),
+        };
+        _loadingJobNames = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _loadingJobNames = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: services.streamPOLogs(widget.companyId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting ||
+            _loadingJobNames) {
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text('Error loading PO logs: ${snapshot.error}'),
+          );
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+        var entries = <_POLogEntry>[];
+
+        for (final doc in docs) {
+          try {
+            final data = doc.data();
+            final jobId = data['jobId'] as String?;
+            entries.add(
+              _POLogEntry(
+                id: doc.id,
+                jobName: jobId == null
+                    ? 'No job'
+                    : (_jobNames[jobId] ?? 'Unknown job'),
+                costCode: data['costCode'] as String? ?? 'Uncoded',
+                date: (data['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+                amount: (data['amount'] as num?)?.toDouble() ?? 0,
+                note: data['note'] as String? ?? '',
+                isReimbursable: data['isReimbursable'] as bool? ?? false,
+                isBillable: data['isBillable'] as bool? ?? false,
+                hasImage: (data['imagePath'] as String?)?.isNotEmpty ?? false,
+              ),
+            );
+          } catch (e) {
+            continue;
+          }
+        }
+
+        if (_searchText.isNotEmpty) {
+          entries = entries.where((e) {
+            return e.jobName.toLowerCase().contains(_searchText) ||
+                e.costCode.toLowerCase().contains(_searchText) ||
+                e.note.toLowerCase().contains(_searchText);
+          }).toList();
+        }
+
+        entries.sort((a, b) {
+          int cmp;
+          switch (_sortBy) {
+            case _POLogSortBy.date:
+              cmp = a.date.compareTo(b.date);
+              break;
+            case _POLogSortBy.job:
+              cmp = a.jobName.toLowerCase().compareTo(b.jobName.toLowerCase());
+              break;
+            case _POLogSortBy.costCode:
+              cmp = a.costCode.toLowerCase().compareTo(
+                b.costCode.toLowerCase(),
+              );
+              break;
+          }
+          return _ascending ? cmp : -cmp;
+        });
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _searchController,
+              decoration: kInputDecoration.copyWith(
+                hintText: 'Search by job, cost code, or note',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchText.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => _searchController.clear(),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Text('Sort by:'),
+                const SizedBox(width: 8),
+                DropdownButton<_POLogSortBy>(
+                  value: _sortBy,
+                  items: const [
+                    DropdownMenuItem(
+                      value: _POLogSortBy.date,
+                      child: Text('Date'),
+                    ),
+                    DropdownMenuItem(
+                      value: _POLogSortBy.job,
+                      child: Text('Job'),
+                    ),
+                    DropdownMenuItem(
+                      value: _POLogSortBy.costCode,
+                      child: Text('Cost code'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _sortBy = value);
+                  },
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: _ascending ? 'Ascending' : 'Descending',
+                  icon: Icon(
+                    _ascending ? Icons.arrow_upward : Icons.arrow_downward,
+                  ),
+                  onPressed: () => setState(() => _ascending = !_ascending),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (entries.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    docs.isEmpty
+                        ? 'No PO logs yet'
+                        : 'No PO logs match your search',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: entries.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, index) =>
+                    POLogTile(entry: entries[index]),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _POLogEntry {
+  final String id;
+  final String jobName;
+  final String costCode;
+  final DateTime date;
+  final double amount;
+  final String note;
+  final bool isReimbursable;
+  final bool isBillable;
+  final bool hasImage;
+
+  _POLogEntry({
+    required this.id,
+    required this.jobName,
+    required this.costCode,
+    required this.date,
+    required this.amount,
+    required this.note,
+    required this.isReimbursable,
+    required this.isBillable,
+    required this.hasImage,
+  });
+}
+
+class POLogTile extends StatelessWidget {
+  final _POLogEntry entry;
+  const POLogTile({super.key, required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  entry.jobName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                '\$${entry.amount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              _Chip(
+                label: entry.costCode,
+                icon: Icons.build,
+                color: Colors.blueGrey,
+              ),
+              _Chip(
+                label:
+                    '${entry.date.month}/${entry.date.day}/${entry.date.year}',
+                icon: Icons.event,
+                color: Colors.blueGrey,
+              ),
+              if (entry.isReimbursable)
+                const _Chip(
+                  label: 'Reimbursable',
+                  icon: Icons.attach_money,
+                  color: Colors.green,
+                ),
+              if (entry.isBillable)
+                const _Chip(
+                  label: 'Billable',
+                  icon: Icons.receipt_long,
+                  color: Colors.orange,
+                ),
+              if (entry.hasImage)
+                const _Chip(
+                  label: 'Photo attached',
+                  icon: Icons.photo,
+                  color: Colors.purple,
+                ),
+            ],
+          ),
+          if (entry.note.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              entry.note,
+              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  const _Chip({required this.label, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

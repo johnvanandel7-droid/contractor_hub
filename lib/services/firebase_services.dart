@@ -239,4 +239,14 @@ class FirebaseServices {
   Future<void> denyJoinRequest(String uid) {
     return firebase.collection('users').doc(uid).delete();
   }
+
+  // PO Logs (Expense tracker)
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> streamPOLogs(String companyId) {
+    return firebase
+        .collection('POlogs')
+        .where('companyId', isEqualTo: companyId)
+        .orderBy('date', descending: true)
+        .snapshots();
+  }
 }

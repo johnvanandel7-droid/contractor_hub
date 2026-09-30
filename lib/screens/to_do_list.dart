@@ -653,8 +653,16 @@ class ToDoTile extends StatelessWidget {
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert, color: Colors.grey[600]),
               onSelected: (value) {
-                if (value == 'edit') _editToDoItem(context);
-                if (value == 'delete') _deleteToDo(context);
+                // Defer to the next event-loop turn: opening a new route
+                // (showDialog) synchronously inside PopupMenuButton's
+                // onSelected, while the popup menu's own route is still
+                // closing, corrupts Flutter's InheritedElement dependents
+                // tracking and surfaces later as a
+                // "dependents.isEmpty" framework assertion.
+                Future.delayed(Duration.zero, () {
+                  if (value == 'edit') _editToDoItem(context);
+                  if (value == 'delete') _deleteToDo(context);
+                });
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(
