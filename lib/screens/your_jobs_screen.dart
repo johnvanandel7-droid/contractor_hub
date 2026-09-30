@@ -231,7 +231,19 @@ void _editJob(context, String jobName, String jobId) async {
       title: Text('edit $jobName job'),
       content: Padding(
         padding: const EdgeInsets.all(8.0),
-        child: Column(children: [TextField()]),
+        child: Column(
+          children: [
+            Text('name'),
+            SizedBox(height: 3),
+            TextField(
+              decoration: kInputDecoration.copyWith(
+                hintText: 'John doe plumbing service',
+              ),
+            ),
+            SizedBox(height: 15),
+            Text('change job supervisor'),
+          ],
+        ),
       ),
     ),
   );

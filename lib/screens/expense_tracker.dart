@@ -3,6 +3,7 @@ import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/constants.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 final services = FirebaseServices.instance;
 
@@ -18,24 +19,50 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
   String? selectedCostCode;
   DateTime selectedDate = DateTime.now();
   final TextEditingController amountController = TextEditingController();
-  List<DropdownMenuItem> costCodes = [
-    DropdownMenuItem(child: Text('Kubota 75')),
-    DropdownMenuItem(child: Text('terex')),
-    DropdownMenuItem(child: Text('mini ex')),
-    DropdownMenuItem(child: Text('jobsite')),
-    DropdownMenuItem(child: Text('time and material')),
-    DropdownMenuItem(child: Text('Kubota 75')),
-    DropdownMenuItem(child: Text('Kubota 75')),
+  String? _companyId;
+  String? PONote;
+  bool? isReimbursable = false;
+  bool? isBillable = false;
+  ImageSource? imageSource;
+  final ImagePicker _picker = ImagePicker();
+  XFile? pickedImage;
+
+  // NOTE: give each item an explicit `value` or DropdownButton can't match
+  // `selectedCostCode` back to an item, and dedupe the accidental repeats.
+  final List<String> costCodes = const [
+    'Kubota 75',
+    'terex',
+    'mini ex',
+    'jobsite',
+    'time and material',
   ];
 
-  late final Stream<QuerySnapshot<Map<String, dynamic>>>
-  _jobsStreamFuture;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _jobsStream;
+  bool _loadingJobs = true;
 
   @override
   void initState() {
     super.initState();
-    Future<String?> companyId = services.getUsersCompanyId(userId)
-    _jobsStreamFuture = services.jobsForCompany(companyId!);
+    _loadJobsStream();
+  }
+
+  Future<void> _loadJobsStream() async {
+    final userId = services.currentUid;
+    if (userId == null) {
+      setState(() => _loadingJobs = false);
+      return;
+    }
+
+    final companyId = await services.getUsersCompanyId(userId);
+    if (!mounted) return;
+
+    setState(() {
+      _companyId = companyId;
+      _jobsStream = companyId == null
+          ? null
+          : services.jobsForCompany(companyId);
+      _loadingJobs = false;
+    });
   }
 
   @override
@@ -57,59 +84,54 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
   }
 
   Widget _buildJobDropdown() {
-    return FutureBuilder<Stream<QuerySnapshot<Map<String, dynamic>>>?>(
-      future: _jobsStreamFuture,
-      builder: (context, futureSnapshot) {
-        if (futureSnapshot.connectionState == ConnectionState.waiting) {
+    if (_loadingJobs) {
+      return const SizedBox(
+        height: 20,
+        width: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    final jobsStream = _jobsStream;
+    if (jobsStream == null) {
+      return const Text('Could not load jobs');
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: jobsStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
             height: 20,
             width: 20,
             child: CircularProgressIndicator(strokeWidth: 2),
           );
         }
-
-        final jobsStream = futureSnapshot.data;
-        if (jobsStream == null) {
-          return const Text('Could not load jobs');
+        if (snapshot.hasError) {
+          print(snapshot.error);
+          return Text('Error: ${snapshot.error}');
         }
 
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: jobsStream,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              );
-            }
-            if (snapshot.hasError) {
-              return Text('Error: ${snapshot.error}');
-            }
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return const Text('No jobs found');
+        }
 
-            final docs = snapshot.data?.docs ?? [];
-            if (docs.isEmpty) {
-              return const Text('No jobs found');
-            }
-
-            return DropdownButton<String>(
-              value: selectedJobId,
-              icon: const Icon(Icons.arrow_downward),
-              hint: const Text('Select a Job'),
-              isExpanded: true,
-              borderRadius: BorderRadius.all(Radius.circular(5)),
-              items: docs.map((doc) {
-                final jobName =
-                    doc.data()['jobName'] as String? ?? 'Unnamed job';
-                return DropdownMenuItem<String>(
-                  value: doc.id,
-                  child: Text(jobName),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() => selectedJobId = value);
-              },
+        return DropdownButton<String>(
+          value: selectedJobId,
+          icon: const Icon(Icons.arrow_downward),
+          hint: const Text('Select a Job'),
+          isExpanded: true,
+          borderRadius: BorderRadius.all(Radius.circular(5)),
+          items: docs.map((doc) {
+            final jobName = doc.data()['name'] as String? ?? 'Unnamed job';
+            return DropdownMenuItem<String>(
+              value: doc.id,
+              child: Text(jobName),
             );
+          }).toList(),
+          onChanged: (value) {
+            setState(() => selectedJobId = value);
           },
         );
       },
@@ -117,16 +139,36 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
   }
 
   Widget costCodeDropdown() {
-    return DropdownButton(
+    return DropdownButton<String>(
       value: selectedCostCode,
       icon: const Icon(Icons.arrow_downward),
       hint: const Text('select a cost code'),
       borderRadius: BorderRadius.all(Radius.circular(5)),
-      items: costCodes,
+      items: costCodes
+          .map(
+            (code) => DropdownMenuItem<String>(value: code, child: Text(code)),
+          )
+          .toList(),
       onChanged: (value) => setState(() {
         selectedCostCode = value;
       }),
     );
+  }
+
+  void getImages() async {
+    try {
+      final picked = await _picker.pickImage(
+        source: imageSource!,
+        imageQuality: 85,
+      );
+      setState(() {
+        pickedImage = picked;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Faile to pick image')));
+    }
   }
 
   @override
@@ -192,10 +234,100 @@ class _ExpenseTrackerState extends State<ExpenseTracker> {
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-                          decoration: kInputDecoration,
+                          decoration: kInputDecoration.copyWith(
+                            hintText: '\$1000',
+                          ),
                         ),
                       ),
                     ],
+                  ),
+                  SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text('Notes:'),
+                      SizedBox(width: 3),
+                      TextField(
+                        decoration: kInputDecoration.copyWith(
+                          hintText: 'bought it too fix the skidsteer',
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            PONote = value;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: isReimbursable,
+                        onChanged: (value) {
+                          setState(() {
+                            isReimbursable = value;
+                          });
+                        },
+                      ),
+                      SizedBox(width: 1),
+                      Text('Reimbursable'),
+                      SizedBox(width: 5),
+                      Checkbox(
+                        value: isBillable,
+                        onChanged: (value) {
+                          setState(() {
+                            isBillable = value;
+                          });
+                        },
+                      ),
+                      SizedBox(width: 1),
+                      Text('Billable'),
+                    ],
+                  ),
+                  SizedBox(width: 10),
+                  Row(
+                    children: [
+                      Spacer(flex: 2),
+                      IconButton(
+                        icon: Icon(Icons.camera_alt, size: 35),
+                        onPressed: () {
+                          setState(() {
+                            imageSource = ImageSource.camera;
+                          });
+                          getImages();
+                        },
+                      ),
+                      Spacer(flex: 1),
+                      IconButton(
+                        icon: Icon(Icons.image, size: 35),
+                        onPressed: () {
+                          setState(() {
+                            imageSource = ImageSource.gallery;
+                          });
+                          getImages();
+                        },
+                      ),
+                      Spacer(flex: 2),
+                    ],
+                  ),
+
+                  ElevatedButton(
+                    onPressed: () {
+                      firebase.collection('POlogs').add({
+                        'companyId': _companyId,
+                        'createdBy': services.currentUid,
+                        'costCode': selectedCostCode,
+                        'job': selectedJobId,
+                        'date': selectedDate,
+                        'note': PONote,
+                        'images': pickedImage?.path,
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      fixedSize: Size(100, 40),
+                    ),
+                    child: Text('Add'),
                   ),
                 ],
               ),

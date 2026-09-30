@@ -23,6 +23,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool showSpinner = false;
   bool loadingCompanies = true;
   String? email;
+  String? name;
   String? password;
   String? confirmPassword;
   String deniedEntryReason = '';
@@ -267,6 +268,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           'isEmployee': isEmployee,
           'companyId': finalCompanyId,
           'companyName': finalCompanyName,
+          'name': name,
           if (!isEmployee) 'numberOfEmployees': numberOfEmployees,
         });
       }
@@ -430,6 +432,23 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                Text('name', style: TextStyle(fontWeight: FontWeight.w600)),
+                Padding(
+                  padding: EdgeInsetsGeometry.only(
+                    top: 3,
+                    left: 10,
+                    right: 10,
+                    bottom: 20,
+                  ),
+                  child: TextField(
+                    decoration: kInputDecoration.copyWith(hintText: 'John Doe'),
+                    onChanged: (value) {
+                      setState(() {
+                        name = value;
+                      });
+                    },
+                  ),
+                ),
 
                 Padding(
                   padding: const EdgeInsets.all(10.0),
@@ -464,7 +483,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             });
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isEmployee
+                            backgroundColor: !isEmployee
                                 ? Colors.blue
                                 : Colors.grey[300],
                             foregroundColor: isEmployee
@@ -651,7 +670,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 MaterialButton(
                   onPressed: _registerUser,
                   color: Colors.blue,
-                  child: Text('Send request to join company'),
+                  child: (isEmployee)
+                      ? Text('create company')
+                      : Text('Send request to join company'),
                 ),
                 const SizedBox(height: 16),
 

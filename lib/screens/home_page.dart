@@ -56,6 +56,7 @@ class _HomePageState extends State<HomePage> {
 
             final user = snapshot.data!;
             final userStatus = user['status'] as String?;
+            final userName = user['name'] as String?;
 
             // ── Pending check ──────────────────────────────────────────
             if (userStatus == 'pending') {
@@ -79,6 +80,16 @@ class _HomePageState extends State<HomePage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Padding(
+                    padding: EdgeInsets.all(5),
+                    child: Text(
+                      'Hi $userName',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                   if (!isEmployee) ...[
                     ReusableButton(
                       buttonText: 'Administrator panel',
@@ -125,6 +136,16 @@ class _HomePageState extends State<HomePage> {
                     buttonText: 'Construction Images',
                     onPress: () {
                       Navigator.pushNamed(context, '/constructionImages');
+                    },
+                    buttonHeight: 40,
+                    buttonWidth: double.infinity,
+                    buttonColor: Colors.blue,
+                    buttonPadding: 8,
+                  ),
+                  ReusableButton(
+                    buttonText: 'Contacts',
+                    onPress: () {
+                      Navigator.pushNamed(context, '/contacts');
                     },
                     buttonHeight: 40,
                     buttonWidth: double.infinity,
