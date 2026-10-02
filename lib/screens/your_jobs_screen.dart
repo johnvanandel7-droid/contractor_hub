@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/constants.dart';
@@ -29,6 +31,62 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
     if (mounted) setState(() => _companyId = user?['companyId'] as String?);
   }
 
+  /// Confirms location services are on, permission is granted, AND that
+  /// permission is precise (not just approximate). Android 12+ / iOS 14+
+  /// let someone grant "Location" access but restrict it to approximate
+  /// accuracy, which checkPermission()/requestPermission() don't surface —
+  /// they only report granted vs denied, not the accuracy tier. An
+  /// approximate reading can be off by a kilometer or more, which makes a
+  /// geofence radius meaningless, so this is treated as a hard requirement
+  /// rather than silently falling back to a low-accuracy reading.
+  Future<void> _ensurePreciseLocationAccess() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw const _LocationSetupException(
+        'Location services are off. Turn on location for your device and try again.',
+        canOpenAppSettings: false,
+      );
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw const _LocationSetupException(
+        'Location permission was denied.',
+        canOpenAppSettings: true,
+      );
+    }
+
+    final accuracyStatus = await Geolocator.getLocationAccuracy();
+    if (accuracyStatus == LocationAccuracyStatus.reduced) {
+      if (Platform.isIOS) {
+        // iOS lets an app ask, once per session, for a temporary upgrade to
+        // precise location without sending the person to Settings. Requires
+        // NSLocationTemporaryUsageDescriptionDictionary with this purposeKey
+        // configured in Info.plist.
+        final upgraded = await Geolocator.requestTemporaryFullAccuracy(
+          purposeKey: 'JobSiteGeofencing',
+        );
+        if (upgraded != LocationAccuracyStatus.precise) {
+          throw const _LocationSetupException(
+            'Precise location is required to set an accurate jobsite radius.',
+            canOpenAppSettings: true,
+          );
+        }
+      } else {
+        // Android has no in-app re-prompt for approximate → precise; the
+        // person has to flip "Use precise location" in system settings.
+        throw const _LocationSetupException(
+          'Precise location is turned off for this app. Enable "Use precise '
+          'location" in Settings, then try again.',
+          canOpenAppSettings: true,
+        );
+      }
+    }
+  }
+
   Future<void> _openAddJobSiteDialog() async {
     if (_companyId == null) return;
 
@@ -36,6 +94,7 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
     final radiusController = TextEditingController(text: '150');
     bool loadingLocation = false;
     String? errorText;
+    bool showOpenSettings = false;
 
     await showDialog(
       context: context,
@@ -76,6 +135,15 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
                         style: const TextStyle(color: Colors.red),
                       ),
                     ),
+                  if (showOpenSettings)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: TextButton.icon(
+                        onPressed: () => Geolocator.openAppSettings(),
+                        icon: const Icon(Icons.settings, size: 18),
+                        label: const Text('Open location settings'),
+                      ),
+                    ),
                 ],
               ),
               actions: [
@@ -92,31 +160,21 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
                             radiusController.text.trim(),
                           );
                           if (name.isEmpty || radius == null || radius <= 0) {
-                            setDialogState(
-                              () => errorText = 'Enter a valid name and radius',
-                            );
+                            setDialogState(() {
+                              errorText = 'Enter a valid name and radius';
+                              showOpenSettings = false;
+                            });
                             return;
                           }
 
                           setDialogState(() {
                             loadingLocation = true;
                             errorText = null;
+                            showOpenSettings = false;
                           });
 
                           try {
-                            if (!await Geolocator.isLocationServiceEnabled()) {
-                              throw Exception('Location services are off');
-                            }
-                            LocationPermission permission =
-                                await Geolocator.checkPermission();
-                            if (permission == LocationPermission.denied) {
-                              permission = await Geolocator.requestPermission();
-                            }
-                            if (permission == LocationPermission.denied ||
-                                permission ==
-                                    LocationPermission.deniedForever) {
-                              throw Exception('Location permission denied');
-                            }
+                            await _ensurePreciseLocationAccess();
 
                             final position =
                                 await Geolocator.getCurrentPosition(
@@ -135,10 +193,17 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
                             );
 
                             if (context.mounted) Navigator.pop(context);
+                          } on _LocationSetupException catch (e) {
+                            setDialogState(() {
+                              loadingLocation = false;
+                              errorText = e.message;
+                              showOpenSettings = e.canOpenAppSettings;
+                            });
                           } catch (e) {
                             setDialogState(() {
                               loadingLocation = false;
                               errorText = 'Could not get location: $e';
+                              showOpenSettings = false;
                             });
                           }
                         },
@@ -222,6 +287,15 @@ class _YourJobsScreenState extends State<YourJobsScreen> {
       ),
     );
   }
+}
+
+class _LocationSetupException implements Exception {
+  final String message;
+  final bool canOpenAppSettings;
+  const _LocationSetupException(
+    this.message, {
+    required this.canOpenAppSettings,
+  });
 }
 
 void _editJob(context, String jobName, String jobId) async {

@@ -37,7 +37,8 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> {
               stream: services.pendingJoinRequests(_companyId!),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  //return Center(child: Text('Error: ${snapshot.error}'));
+                  print('error $snapshot.error');
                 }
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());

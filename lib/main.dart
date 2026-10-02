@@ -1,5 +1,6 @@
 import 'package:contractor_hub/screens/administrator_panel.dart';
 import 'package:contractor_hub/screens/company_files.dart';
+import 'package:contractor_hub/screens/construction_images.dart';
 import 'package:contractor_hub/screens/contacts.dart';
 import 'package:contractor_hub/screens/expense_tracker.dart';
 import 'package:contractor_hub/screens/join_requests.dart';
@@ -51,6 +52,7 @@ void main() async {
         '/administratorPanel': (context) => AdministratorPanel(),
         '/joinRequests': (context) => JoinRequestsScreen(),
         '/contacts': (context) => Contacts(),
+        '/constructionImages': (context) => ConstructionImages(),
       },
     ),
   );
