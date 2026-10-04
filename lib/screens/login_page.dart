@@ -171,6 +171,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 color: Colors.grey,
                 child: Text('Log In'),
               ),
+              SizedBox(height: 15),
+              Row(
+                children: [
+                  Text('Don\'t have an account. '),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/registerScreen');
+                    },
+                    child: Text('create account'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
