@@ -1,4 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permissions must be direct children of <manifest>, before <application>. -->
+ 
+    <!-- Network access. Debug builds get this automatically; release builds do not. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+ 
+    <!-- Geolocator: clock in/out geofencing and jobsite creation. Declaring both
+         lets Android 12+ show the precise/approximate choice dialog. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+ 
+    <!-- flutter_contacts: boss-only phone contact sync. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
+ 
     <application
         android:label="contractor_hub"
         android:name="${applicationName}"
@@ -34,7 +47,7 @@
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
          https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
-
+ 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
         <intent>

@@ -43,9 +43,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool smallPaymentCompany = true;
   bool mediumPaymentCompany = false;
   bool largePaymentCompany = false;
+  int numberOfAddableImages = 100;
 
   bool get _passwordsMismatch =>
-      confirmPassword != null && confirmPassword!.isNotEmpty && password != confirmPassword;
+      confirmPassword != null &&
+      confirmPassword!.isNotEmpty &&
+      password != confirmPassword;
 
   @override
   void initState() {
@@ -226,14 +229,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
           // Bump the employee count inside a transaction so two people
           // joining at the same moment can't both slip past the limit.
-          final companyRef = _firestore.collection('companies').doc(finalCompanyId);
+          final companyRef = _firestore
+              .collection('companies')
+              .doc(finalCompanyId);
           await _firestore.runTransaction((transaction) async {
             final snapshot = await transaction.get(companyRef);
             if (!snapshot.exists) {
               throw Exception('That company no longer exists.');
             }
             final current = (snapshot.data()?['numberOfEmployees'] ?? 0) as int;
-            final max = (snapshot.data()?['numberOfAddableEmployees'] ?? 0) as int;
+            final max =
+                (snapshot.data()?['numberOfAddableEmployees'] ?? 0) as int;
             if (current >= max) {
               throw Exception('This company has reached its employee limit.');
             }
@@ -247,10 +253,21 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             'companyName': companyNameController.text.trim(),
             'bossId': uid,
             'createdAt': FieldValue.serverTimestamp(),
+
+            // employee quota
             'numberOfEmployees': 0,
             'numberOfAddableEmployees': numberOfAddableEmployees,
+
+            // Plan
             'companyPaymentPlan': companyPaymentPlan,
+
+            // Image Quota
+            'numberOfAddableImages': numberOfAddableImages,
+
+            // employees
             'employeeIds': [],
+
+            // company images
             'images': [],
           });
           finalCompanyId = newCompanyRef.id;
@@ -349,7 +366,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Create Account', style: TextStyle(color: Colors.black)),
+        title: const Text(
+          'Create Account',
+          style: TextStyle(color: Colors.black),
+        ),
       ),
       body: ModalProgressHUD(
         inAsyncCall: showSpinner,
@@ -421,8 +441,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     hintText: 'At least 6 characters',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                 ),
@@ -446,8 +471,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     hintText: 'Confirm your password',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () => setState(
+                        () =>
+                            _obscureConfirmPassword = !_obscureConfirmPassword,
+                      ),
                     ),
                   ),
                 ),
@@ -460,7 +492,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     ),
                   ),
                 const SizedBox(height: 16),
-                const Text('Name', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                const Text(
+                  'Name',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
                 Padding(
                   padding: const EdgeInsets.only(top: 8, bottom: 20),
                   child: TextField(
@@ -486,8 +521,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             });
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isEmployee ? Colors.blue : Colors.grey[300],
-                            foregroundColor: isEmployee ? Colors.white : Colors.black87,
+                            backgroundColor: isEmployee
+                                ? Colors.blue
+                                : Colors.grey[300],
+                            foregroundColor: isEmployee
+                                ? Colors.white
+                                : Colors.black87,
                           ),
                           child: const Text('Employee'),
                         ),
@@ -502,8 +541,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             });
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: !isEmployee ? Colors.blue : Colors.grey[300],
-                            foregroundColor: !isEmployee ? Colors.white : Colors.black87,
+                            backgroundColor: !isEmployee
+                                ? Colors.blue
+                                : Colors.grey[300],
+                            foregroundColor: !isEmployee
+                                ? Colors.white
+                                : Colors.black87,
                           ),
                           child: const Text('Owner/boss'),
                         ),
@@ -530,7 +573,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           const Expanded(
                             child: Text(
                               'No companies found. Ask your employer to register first, or refresh.',
-                              style: TextStyle(color: Colors.grey, fontSize: 13),
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                           IconButton(
@@ -554,8 +600,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           value: c['id'] as String,
                           enabled: !full,
                           child: Text(
-                            full ? '${c['companyName']} (full)' : '${c['companyName']}',
-                            style: TextStyle(color: full ? Colors.grey : Colors.black),
+                            full
+                                ? '${c['companyName']} (full)'
+                                : '${c['companyName']}',
+                            style: TextStyle(
+                              color: full ? Colors.grey : Colors.black,
+                            ),
                           ),
                         );
                       }).toList(),
@@ -587,7 +637,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   _PlanCard(
                     title: 'Small business',
                     price: '\$20 CAD',
-                    description: 'Up to 10 employees',
+                    description: 'Up to 10 employees 500 addable images',
                     selected: smallPaymentCompany,
                     onTap: () => setState(() {
                       smallPaymentCompany = true;
@@ -595,13 +645,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       largePaymentCompany = false;
                       companyPaymentPlan = 'small';
                       numberOfAddableEmployees = 10;
+                      numberOfAddableImages = 500;
                     }),
                   ),
                   const SizedBox(height: 10),
                   _PlanCard(
                     title: 'Enterprise',
                     price: '\$40 CAD',
-                    description: 'Up to 100 employees',
+                    description: 'Up to 100 employees 1500 addable images',
                     selected: mediumPaymentCompany,
                     onTap: () => setState(() {
                       smallPaymentCompany = false;
@@ -609,13 +660,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       largePaymentCompany = false;
                       companyPaymentPlan = 'medium';
                       numberOfAddableEmployees = 100;
+                      numberOfAddableImages = 1500;
                     }),
                   ),
                   const SizedBox(height: 10),
                   _PlanCard(
                     title: 'Large Enterprise',
                     price: '\$100 CAD',
-                    description: 'Unlimited employees',
+                    description: 'Unlimited employees Unlimited images',
                     selected: largePaymentCompany,
                     onTap: () => setState(() {
                       smallPaymentCompany = false;
@@ -623,6 +675,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       largePaymentCompany = true;
                       companyPaymentPlan = 'large';
                       numberOfAddableEmployees = 1000000000;
+                      numberOfAddableImages = 100000;
                     }),
                   ),
                 ],
@@ -650,9 +703,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                  child: Text(isEmployee ? 'Send request to join company' : 'Create company'),
+                  child: Text(
+                    isEmployee
+                        ? 'Send request to join company'
+                        : 'Create company',
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -710,7 +769,10 @@ class _PlanCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? Colors.blue[50] : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? Colors.blue : Colors.grey[300]!, width: selected ? 2 : 1),
+          border: Border.all(
+            color: selected ? Colors.blue : Colors.grey[300]!,
+            width: selected ? 2 : 1,
+          ),
         ),
         child: Row(
           children: [
@@ -723,8 +785,17 @@ class _PlanCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                  Text(description, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    description,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
                 ],
               ),
             ),

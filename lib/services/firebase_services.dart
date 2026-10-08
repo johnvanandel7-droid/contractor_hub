@@ -27,6 +27,16 @@ class FirebaseServices {
 
   /// Returns the user document, or null if it doesn't exist.
   /// This is async — callers MUST await it or use a FutureBuilder/StreamBuilder.
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> companyStream(
+    String companyId,
+  ) {
+    return firebase
+        .collection('companies')
+        .doc(companyId)
+        .snapshots();
+  }
+
   Future<Map<String, dynamic>?> getUser(String uid) async {
     final doc = await firebase.collection('users').doc(uid).get();
     if (!doc.exists) return null;
@@ -199,15 +209,35 @@ class FirebaseServices {
   Future<void> deleteEmployee(String employeeId) async {
     final userRef = firebase.collection('users').doc(employeeId);
     final userDoc = await userRef.get();
-    final companyId = userDoc.data()?['companyId'] as String?;
+
+    if (!userDoc.exists) {
+      return;
+    }
+
+    final data = userDoc.data();
+    final companyId = data?['companyId'] as String?;
 
     await firebase.runTransaction((transaction) async {
       transaction.delete(userRef);
+
       if (companyId != null) {
-        final companyRef = firebase.collection('companies').doc(companyId);
-        transaction.update(companyRef, {
-          'employeeCount': FieldValue.increment(-1),
-        });
+        final companyRef =
+            firebase.collection('companies').doc(companyId);
+
+        final companySnapshot = await transaction.get(companyRef);
+
+        if (companySnapshot.exists) {
+          final companyData = companySnapshot.data();
+
+          final currentEmployees =
+              (companyData?['numberOfEmployees'] ?? 0) as int;
+
+          transaction.update(companyRef, {
+            'numberOfEmployees':
+                currentEmployees > 0 ? currentEmployees - 1 : 0,
+            'employeeIds': FieldValue.arrayRemove([employeeId]),
+          });
+        }
       }
     });
   }
@@ -236,10 +266,41 @@ class FirebaseServices {
     return firebase.collection('users').doc(uid).update({'status': 'active'});
   }
 
-  Future<void> denyJoinRequest(String uid) {
-    return firebase.collection('users').doc(uid).delete();
-  }
+  Future<void> denyJoinRequest(String uid) async {
+    final userRef = firebase.collection('users').doc(uid);
+    final userSnapshot = await userRef.get();
 
+    if (!userSnapshot.exists) {
+      return;
+    }
+
+    final userData = userSnapshot.data();
+    final companyId = userData?['companyId'] as String?;
+
+    await firebase.runTransaction((transaction) async {
+      transaction.delete(userRef);
+
+      if (companyId != null) {
+        final companyRef =
+            firebase.collection('companies').doc(companyId);
+
+        final companySnapshot = await transaction.get(companyRef);
+
+        if (companySnapshot.exists) {
+          final companyData = companySnapshot.data();
+
+          final currentEmployees =
+              (companyData?['numberOfEmployees'] ?? 0) as int;
+
+          transaction.update(companyRef, {
+            'numberOfEmployees':
+                currentEmployees > 0 ? currentEmployees - 1 : 0,
+            'employeeIds': FieldValue.arrayRemove([uid]),
+          });
+        }
+      }
+    });
+  }
   // PO Logs (Expense tracker)
 
   Stream<QuerySnapshot<Map<String, dynamic>>> streamPOLogs(String companyId) {

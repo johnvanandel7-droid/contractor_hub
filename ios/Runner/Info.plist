@@ -45,5 +45,26 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- Contacts: boss-only phone contact sync (flutter_contacts). -->
+	<key>NSContactsUsageDescription</key>
+	<string>Contractor Hub reads your contacts so a company owner can import them into the shared company contact list.</string>
+
+	<!-- Location: clock in/out geofencing and jobsite creation (geolocator). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Contractor Hub uses your location to clock you in and out at job sites and to record job site boundaries.</string>
+	<!-- Used by Geolocator.requestTemporaryFullAccuracy(purposeKey: 'JobSiteGeofencing')
+	     in your_jobs_screen.dart. The key below must match that purposeKey exactly. -->
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>JobSiteGeofencing</key>
+		<string>Precise location is needed to set an accurate boundary around a job site.</string>
+	</dict>
+
+	<!-- Photos: image_picker for construction images and PO logs. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Contractor Hub uses the camera to attach photos to jobs and purchase orders.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Contractor Hub accesses your photo library to attach pictures to jobs and purchase orders.</string>
 </dict>
 </plist>
