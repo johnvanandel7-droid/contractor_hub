@@ -33,12 +33,13 @@ dependencies:
   
   # other
   timeago: ^3.7.0
-
-  #images
-  image_picker: ^1.2.1
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
   flutter_contacts: ^2.6.0
+  fl_chart: ^1.1.1
+
+  #images
+  image_picker: ^1.2.1
 
 dev_dependencies:
   flutter_test:

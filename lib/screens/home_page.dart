@@ -152,6 +152,16 @@ class _HomePageState extends State<HomePage> {
                     buttonColor: Colors.blue,
                     buttonPadding: 8,
                   ),
+                  ReusableButton(
+                    buttonText: 'Work Stats',
+                    onPress: () {
+                      Navigator.pushNamed(context, '/workStats');
+                    },
+                    buttonHeight: 40,
+                    buttonWidth: double.infinity,
+                    buttonColor: Colors.blue,
+                    buttonPadding: 8,
+                  ),
                 ],
               ),
             );

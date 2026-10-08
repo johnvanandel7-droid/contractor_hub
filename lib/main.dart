@@ -9,6 +9,7 @@ import 'package:contractor_hub/screens/register_screen.dart';
 import 'package:contractor_hub/screens/registration_payment_screen.dart';
 import 'package:contractor_hub/screens/welcome_screen.dart';
 import 'package:contractor_hub/screens/to_do_list.dart';
+import 'package:contractor_hub/screens/work_stats.dart';
 import 'package:contractor_hub/screens/your_employees_screen.dart';
 import 'package:contractor_hub/screens/your_jobs_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -55,6 +56,7 @@ void main() async {
         '/contacts': (context) => Contacts(),
         '/constructionImages': (context) => ConstructionImages(),
         '/quickbooksConnection':(context) => QuickbooksConnection(),
+        '/workStats':(context) => WorkStats(),
       },
     ),
   );
