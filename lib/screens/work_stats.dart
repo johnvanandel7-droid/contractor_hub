@@ -7,8 +7,102 @@ import 'package:flutter/material.dart';
 
 final services = FirebaseServices.instance;
 
-class WorkStats extends StatelessWidget {
+enum StatsPeriod { thisWeek, lastWeek, thisMonth, lastMonth, allTime }
+
+extension StatsPeriodExtension on StatsPeriod {
+  String get label {
+    switch (this) {
+      case StatsPeriod.thisWeek:
+        return 'This Week';
+      case StatsPeriod.lastWeek:
+        return 'Last Week';
+      case StatsPeriod.thisMonth:
+        return 'This Month';
+      case StatsPeriod.lastMonth:
+        return 'Last Month';
+      case StatsPeriod.allTime:
+        return 'All Time';
+    }
+  }
+
+  DateTime? get startDate {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    switch (this) {
+      case StatsPeriod.thisWeek:
+        return today.subtract(Duration(days: today.weekday - 1));
+
+      case StatsPeriod.lastWeek:
+        return today.subtract(Duration(days: today.weekday - 1 + 7));
+
+      case StatsPeriod.thisMonth:
+        return DateTime(now.year, now.month, 1);
+
+      case StatsPeriod.lastMonth:
+        return DateTime(now.year, now.month - 1, 1);
+
+      case StatsPeriod.allTime:
+        return null;
+    }
+  }
+
+  DateTime? get endDate {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    switch (this) {
+      case StatsPeriod.thisWeek:
+        return today
+            .subtract(Duration(days: today.weekday - 1))
+            .add(const Duration(days: 7));
+
+      case StatsPeriod.lastWeek:
+        return today.subtract(Duration(days: today.weekday - 1));
+
+      case StatsPeriod.thisMonth:
+        return DateTime(now.year, now.month + 1, 1);
+
+      case StatsPeriod.lastMonth:
+        return DateTime(now.year, now.month, 1);
+
+      case StatsPeriod.allTime:
+        return null;
+    }
+  }
+}
+
+class WorkStats extends StatefulWidget {
   const WorkStats({super.key});
+
+  @override
+  State<WorkStats> createState() => _WorkStatsState();
+}
+
+class _WorkStatsState extends State<WorkStats> {
+  StatsPeriod selectedPeriod = StatsPeriod.thisWeek;
+
+  List<ClockRecord> filterRecords(List<ClockRecord> records) {
+    final start = selectedPeriod.startDate;
+    final end = selectedPeriod.endDate;
+
+    return records.where((record) {
+      final date = record.clockIn;
+
+      if (date == null) return false;
+
+      if (start != null && date.isBefore(start)) {
+        return false;
+      }
+
+      if (end != null && !date.isBefore(end)) {
+        return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -29,9 +123,7 @@ class WorkStats extends StatelessWidget {
         stream: services.clockHistory(uid, limit: 200),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
@@ -46,9 +138,7 @@ class WorkStats extends StatelessWidget {
           final docs = snapshot.data?.docs ?? [];
 
           if (docs.isEmpty) {
-            return const Center(
-              child: Text('No work records yet.'),
-            );
+            return const Center(child: Text('No work records yet.'));
           }
 
           final records = docs
@@ -60,68 +150,105 @@ class WorkStats extends StatelessWidget {
             children: [
               const Text(
                 'Work Stats',
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              ),
+
+
+              const SizedBox(height: 16),
+
+              // Period selector
+              const Text(
+                'Time Period',
                 style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
+              ),
+
+              const SizedBox(height: 8),
+
+              DropdownButtonFormField<StatsPeriod>(
+                value: selectedPeriod,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
+                items: StatsPeriod.values.map((period) {
+                  return DropdownMenuItem(
+                    value: period,
+                    child: Text(period.label),
+                  );
+                }).toList(),
+                onChanged: (period) {
+                  if (period != null) {
+                    setState(() {
+                      selectedPeriod = period;
+                    });
+                  }
+                },
               ),
 
               const SizedBox(height: 16),
 
-              // ─────────────────────────────────────────────
-              // TOTAL HOURS
-              // ─────────────────────────────────────────────
-
-              _StatsCards(records: records),
-
-              const SizedBox(height: 20),
-
-              // ─────────────────────────────────────────────
-              // HOURS BY JOB
-              // ─────────────────────────────────────────────
-
-              _SectionTitle(
-                title: 'Hours by Job',
-                icon: Icons.work_outline,
-              ),
-
-              const SizedBox(height: 10),
-
-              HoursByJobChart(records: records),
-
-              const SizedBox(height: 24),
-
-              // ─────────────────────────────────────────────
-              // THIS WEEK
-              // ─────────────────────────────────────────────
-
-              _SectionTitle(
-                title: 'This Week',
-                icon: Icons.calendar_view_week,
-              ),
-
-              const SizedBox(height: 10),
-
-              WeeklyHoursChart(records: records),
-
-              const SizedBox(height: 24),
-
-              // ─────────────────────────────────────────────
-              // RECENT SHIFTS
-              // ─────────────────────────────────────────────
-
-              _SectionTitle(
-                title: 'Recent Shifts',
-                icon: Icons.access_time,
-              ),
-
-              const SizedBox(height: 10),
-
-              ...records
-                  .take(20)
-                  .map(
-                    (record) => ShiftTemplate(record: record),
+              if (records.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: Text('No shifts found for this period.'),
                   ),
+                )
+              else ...[
+                _StatsCards(
+                  records: records,
+                  showToday: selectedPeriod == StatsPeriod.thisWeek ||
+                      selectedPeriod == StatsPeriod.thisMonth ||
+                      selectedPeriod == StatsPeriod.allTime,
+                ),
+
+                const SizedBox(height: 24),
+
+                _SectionTitle(
+                  title: 'Hours by Job',
+                  icon: Icons.work_outline,
+                ),
+
+                const SizedBox(height: 10),
+
+                HoursByJobChart(records: records),
+
+                const SizedBox(height: 24),
+
+                _SectionTitle(
+                  title: selectedPeriod == StatsPeriod.allTime
+                      ? 'Hours by Day of Week'
+                      : 'Daily Hours — ${selectedPeriod.label}',
+                  icon: Icons.calendar_view_week,
+                ),
+
+                const SizedBox(height: 10),
+
+                WeeklyHoursChart(
+                  records: records,
+                  period: selectedPeriod,
+                ),
+
+                const SizedBox(height: 24),
+
+                _SectionTitle(
+                  title: 'Recent Shifts',
+                  icon: Icons.access_time,
+                ),
+
+                const SizedBox(height: 10),
+
+                ...records.take(20).map(
+                  (record) => ShiftTemplate(record: record),
+                ),
+              ],
             ],
           );
         },
@@ -173,9 +300,7 @@ class ClockRecord {
       companyName: data['companyName'] as String? ?? '',
       jobSiteId: data['jobSiteId'] as String? ?? '',
       jobSiteName: data['jobSiteName'] as String? ?? 'Unknown job',
-      clockIn: clockInTimestamp is Timestamp
-          ? clockInTimestamp.toDate()
-          : null,
+      clockIn: clockInTimestamp is Timestamp ? clockInTimestamp.toDate() : null,
       clockOut: clockOutTimestamp is Timestamp
           ? clockOutTimestamp.toDate()
           : null,
@@ -211,76 +336,46 @@ class ClockRecord {
 
 class _StatsCards extends StatelessWidget {
   final List<ClockRecord> records;
+  final bool showToday;
 
   const _StatsCards({
     required this.records,
+    this.showToday = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-
-    // Monday = start of week.
-    final startOfWeek = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(
-      Duration(days: now.weekday - 1),
-    );
-
-    final startOfToday = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    );
+    final today = DateTime(now.year, now.month, now.day);
 
     double todayHours = 0;
-    double weekHours = 0;
-    double totalHours = 0;
+    double selectedHours = 0;
 
     for (final record in records) {
-      final hours = record.hoursWorked;
+      selectedHours += record.hoursWorked;
 
-      totalHours += hours;
-
-      if (record.clockIn != null) {
-        if (!record.clockIn!.isBefore(startOfToday)) {
-          todayHours += hours;
-        }
-
-        if (!record.clockIn!.isBefore(startOfWeek)) {
-          weekHours += hours;
-        }
+      if (record.clockIn != null &&
+          !record.clockIn!.isBefore(today)) {
+        todayHours += record.hoursWorked;
       }
     }
 
     return Row(
       children: [
-        Expanded(
-          child: _StatCard(
-            title: 'Today',
-            value: '${todayHours.toStringAsFixed(1)}h',
-            icon: Icons.today,
+        if (showToday) ...[
+          Expanded(
+            child: _StatCard(
+              title: 'Today',
+              value: '${todayHours.toStringAsFixed(1)}h',
+              icon: Icons.today,
+            ),
           ),
-        ),
-
-        const SizedBox(width: 8),
-
+          const SizedBox(width: 8),
+        ],
         Expanded(
           child: _StatCard(
-            title: 'This Week',
-            value: '${weekHours.toStringAsFixed(1)}h',
-            icon: Icons.calendar_month,
-          ),
-        ),
-
-        const SizedBox(width: 8),
-
-        Expanded(
-          child: _StatCard(
-            title: 'Total',
-            value: '${totalHours.toStringAsFixed(1)}h',
+            title: 'Selected Period',
+            value: '${selectedHours.toStringAsFixed(1)}h',
             icon: Icons.timer,
           ),
         ),
@@ -336,22 +431,16 @@ class _StatCard extends StatelessWidget {
 class HoursByJobChart extends StatelessWidget {
   final List<ClockRecord> records;
 
-  const HoursByJobChart({
-    super.key,
-    required this.records,
-  });
+  const HoursByJobChart({super.key, required this.records});
 
   @override
   Widget build(BuildContext context) {
     final Map<String, double> hoursByJob = {};
 
     for (final record in records) {
-      final job = record.jobSiteName.isEmpty
-          ? 'Unknown'
-          : record.jobSiteName;
+      final job = record.jobSiteName.isEmpty ? 'Unknown' : record.jobSiteName;
 
-      hoursByJob[job] =
-          (hoursByJob[job] ?? 0) + record.hoursWorked;
+      hoursByJob[job] = (hoursByJob[job] ?? 0) + record.hoursWorked;
     }
 
     if (hoursByJob.isEmpty) {
@@ -376,22 +465,15 @@ class HoursByJobChart extends StatelessWidget {
 
           titlesData: FlTitlesData(
             leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 35,
-              ),
+              sideTitles: SideTitles(showTitles: true, reservedSize: 35),
             ),
 
             rightTitles: const AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: false,
-              ),
+              sideTitles: SideTitles(showTitles: false),
             ),
 
             topTitles: const AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: false,
-              ),
+              sideTitles: SideTitles(showTitles: false),
             ),
 
             bottomTitles: AxisTitles(
@@ -424,23 +506,20 @@ class HoursByJobChart extends StatelessWidget {
             ),
           ),
 
-          barGroups: List.generate(
-            entries.length,
-            (index) {
-              final hours = entries[index].value;
+          barGroups: List.generate(entries.length, (index) {
+            final hours = entries[index].value;
 
-              return BarChartGroupData(
-                x: index,
-                barRods: [
-                  BarChartRodData(
-                    toY: hours,
-                    width: 25,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ],
-              );
-            },
-          ),
+            return BarChartGroupData(
+              x: index,
+              barRods: [
+                BarChartRodData(
+                  toY: hours,
+                  width: 25,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ],
+            );
+          }),
         ),
       ),
     );
@@ -453,45 +532,56 @@ class HoursByJobChart extends StatelessWidget {
 
 class WeeklyHoursChart extends StatelessWidget {
   final List<ClockRecord> records;
+  final StatsPeriod period;
 
   const WeeklyHoursChart({
     super.key,
     required this.records,
+    required this.period,
   });
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
+    final isAllTime = period == StatsPeriod.allTime;
+    final isMonth = period == StatsPeriod.thisMonth ||
+        period == StatsPeriod.lastMonth;
 
-    final monday = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(
-      Duration(days: now.weekday - 1),
-    );
+    final labels = isAllTime
+        ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        : isMonth
+            ? List.generate(31, (i) => '${i + 1}')
+            : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-    final List<double> dailyHours = List.filled(7, 0);
+    final dailyHours = List<double>.filled(labels.length, 0);
 
     for (final record in records) {
-      if (record.clockIn == null) continue;
+      final date = record.clockIn;
+      if (date == null) continue;
 
-      final date = record.clockIn!;
+      final index = isAllTime
+          ? date.weekday - 1
+          : isMonth
+              ? date.day - 1
+              : date.weekday - 1;
 
-      final difference = DateTime(
-        date.year,
-        date.month,
-        date.day,
-      ).difference(monday).inDays;
-
-      if (difference >= 0 && difference < 7) {
-        dailyHours[difference] += record.hoursWorked;
+      if (index >= 0 && index < dailyHours.length) {
+        dailyHours[index] += record.hoursWorked;
       }
     }
 
-    final maxHours = dailyHours.reduce(
-      (a, b) => a > b ? a : b,
-    );
+    final maxHours = dailyHours.isEmpty
+        ? 0.0
+        : dailyHours.reduce((a, b) => a > b ? a : b);
+
+    final visibleCount = isMonth
+        ? (period == StatsPeriod.thisMonth
+            ? DateTime.now().day
+            : DateTime(
+                DateTime.now().year,
+                DateTime.now().month,
+                0,
+              ).day)
+        : labels.length;
 
     return Container(
       height: 280,
@@ -500,71 +590,53 @@ class WeeklyHoursChart extends StatelessWidget {
       child: BarChart(
         BarChartData(
           maxY: maxHours == 0 ? 10 : maxHours * 1.2,
+          barGroups: List.generate(visibleCount, (index) {
+            return BarChartGroupData(
+              x: index,
+              barRods: [
+                BarChartRodData(
+                  toY: dailyHours[index],
+                  width: isMonth ? 8 : 22,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ],
+            );
+          }),
           borderData: FlBorderData(show: false),
-
           titlesData: FlTitlesData(
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 35,
               ),
             ),
-
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: false,
-              ),
-            ),
-
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: false,
-              ),
-            ),
-
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
+                interval: isMonth ? 5 : 1,
                 getTitlesWidget: (value, meta) {
-                  const days = [
-                    'Mon',
-                    'Tue',
-                    'Wed',
-                    'Thu',
-                    'Fri',
-                    'Sat',
-                    'Sun',
-                  ];
-
                   final index = value.toInt();
 
-                  if (index < 0 || index >= days.length) {
-                    return const SizedBox();
+                  if (index < 0 || index >= visibleCount) {
+                    return const SizedBox.shrink();
                   }
 
-                  return Text(
-                    days[index],
-                    style: const TextStyle(fontSize: 11),
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      labels[index],
+                      style: const TextStyle(fontSize: 10),
+                    ),
                   );
                 },
               ),
             ),
-          ),
-
-          barGroups: List.generate(
-            7,
-            (index) {
-              return BarChartGroupData(
-                x: index,
-                barRods: [
-                  BarChartRodData(
-                    toY: dailyHours[index],
-                    width: 22,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ],
-              );
-            },
           ),
         ),
       ),
@@ -579,10 +651,7 @@ class WeeklyHoursChart extends StatelessWidget {
 class ShiftTemplate extends StatelessWidget {
   final ClockRecord record;
 
-  const ShiftTemplate({
-    super.key,
-    required this.record,
-  });
+  const ShiftTemplate({super.key, required this.record});
 
   String _formatDate(DateTime? date) {
     if (date == null) {
@@ -600,8 +669,8 @@ class ShiftTemplate extends StatelessWidget {
     final hour = date.hour == 0
         ? 12
         : date.hour > 12
-            ? date.hour - 12
-            : date.hour;
+        ? date.hour - 12
+        : date.hour;
 
     final minute = date.minute.toString().padLeft(2, '0');
 
@@ -636,9 +705,7 @@ class ShiftTemplate extends StatelessWidget {
 
               Text(
                 '${record.hoursWorked.toStringAsFixed(2)} hrs',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -647,9 +714,7 @@ class ShiftTemplate extends StatelessWidget {
 
           Text(
             _formatDate(record.clockIn),
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.w500),
           ),
 
           const SizedBox(height: 4),
@@ -662,20 +727,14 @@ class ShiftTemplate extends StatelessWidget {
 
           Text(
             'Method: ${record.method}',
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
           ),
 
           if (record.note.isNotEmpty) ...[
             const SizedBox(height: 5),
             Text(
               'Note: ${record.note}',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
             ),
           ],
         ],
@@ -692,10 +751,7 @@ class _SectionTitle extends StatelessWidget {
   final String title;
   final IconData icon;
 
-  const _SectionTitle({
-    required this.title,
-    required this.icon,
-  });
+  const _SectionTitle({required this.title, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -705,10 +761,7 @@ class _SectionTitle extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
       ],
     );

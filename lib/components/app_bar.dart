@@ -5,15 +5,68 @@ import 'package:provider/provider.dart';
 import 'package:contractor_hub/providers/auth_provider.dart';
  
 class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
-  // Optional: pass e.g. AppBarWidget(title: 'To Do List') from a screen to
-  // show what page you're on instead of the static app name everywhere.
-  // Existing call sites with no argument keep working unchanged.
+  // Optional: AppBarWidget(title: 'To Do List') shows the current page name.
   final String? title;
  
   const AppBarWidget({super.key, this.title});
  
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight + 30);
+ 
+  void _snack(ScaffoldMessengerState messenger, String text) {
+    messenger.showSnackBar(SnackBar(content: Text(text)));
+  }
+ 
+  Future<void> _confirmAndSignOut(BuildContext context) async {
+    // Grab everything we need from context BEFORE any await.
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+ 
+    final AuthProvider auth;
+    try {
+      auth = context.read<AuthProvider>();
+    } catch (e) {
+      debugPrint('Logout: AuthProvider lookup failed: $e');
+      _snack(messenger,
+          'Logout failed: AuthProvider is not provided above this screen. ($e)');
+      return;
+    }
+ 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text('You will need to sign in again.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+ 
+    try {
+      await auth.signOut();
+    } catch (e) {
+      debugPrint('Logout: signOut threw: $e');
+      _snack(messenger, 'Could not sign out: $e');
+      return;
+    }
+ 
+    try {
+      navigator.pushNamedAndRemoveUntil('/welcomeScreen', (route) => false);
+    } catch (e) {
+      debugPrint('Logout: navigation failed: $e');
+      _snack(messenger,
+          "Signed out, but couldn't open /welcomeScreen (is the route registered?): $e");
+    }
+  }
  
   @override
   Widget build(BuildContext context) {
@@ -44,30 +97,15 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ReusableIconButton(
-                onPressed: () {
-                  // Clears back to Home instead of pushing another copy on
-                  // top when Home is tapped while already on Home, or stacks
-                  // of screens deep.
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/homePage',
-                    (route) => false,
-                  );
-                },
+                onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/homePage',
+                  (route) => false,
+                ),
                 icon: const Icon(Icons.home),
               ),
               ReusableIconButton(
-                onPressed: () async {
-                  await context.read<AuthProvider>().signOut();
-                  if (!context.mounted) return;
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/welcomeScreen',
-                    (route) => false,
-                  );
-                },
-                // Was Icons.close, which reads as "dismiss" rather than
-                // "sign out" — logout is the unambiguous choice here.
+                onPressed: () => _confirmAndSignOut(context),
                 icon: const Icon(Icons.logout),
               ),
             ],
