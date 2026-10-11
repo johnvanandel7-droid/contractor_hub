@@ -44,6 +44,16 @@ class FirebaseServices {
     return firebase.collection('users').doc(uid).snapshots();
   }
 
+    Future<String?> getUserNameByUid(String userId) async {
+    try {
+      final userDoc = await firebase.collection('users').doc(userId).get();
+      final name = userDoc.data()?['name'] as String?;
+      return name;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<String?> getUsersCompanyId(String userId) async {
     try {
       final userDoc = await firebase.collection('users').doc(userId).get();
@@ -203,41 +213,56 @@ class FirebaseServices {
         .snapshots();
   }
 
-  Future<void> deleteEmployee(String employeeId) async {
-    final userRef = firebase.collection('users').doc(employeeId);
-    final userDoc = await userRef.get();
+  // Future<void> deleteEmployee(String employeeId) async {
+  //   final userRef = firebase.collection('users').doc(employeeId);
+  //   final userDoc = await userRef.get();
 
-    if (!userDoc.exists) {
-      return;
-    }
+  //   if (!userDoc.exists) {
+  //     return;
+  //   }
 
-    final data = userDoc.data();
-    final companyId = data?['companyId'] as String?;
+  //   final data = userDoc.data();
+  //   final companyId = data?['companyId'] as String?;
 
-    await firebase.runTransaction((transaction) async {
-      transaction.delete(userRef);
+  //   await firebase.runTransaction((transaction) async {
+  //     transaction.delete(userRef);
 
-      if (companyId != null) {
-        final companyRef = firebase.collection('companies').doc(companyId);
+  //     if (companyId != null) {
+  //       final companyRef = firebase.collection('companies').doc(companyId);
 
-        final companySnapshot = await transaction.get(companyRef);
+  //       final companySnapshot = await transaction.get(companyRef);
 
-        if (companySnapshot.exists) {
-          final companyData = companySnapshot.data();
+  //       if (companySnapshot.exists) {
+  //         final companyData = companySnapshot.data();
 
-          final currentEmployees =
-              (companyData?['numberOfEmployees'] ?? 0) as int;
+  //         final currentEmployees =
+  //             (companyData?['numberOfEmployees'] ?? 0) as int;
 
-          transaction.update(companyRef, {
-            'numberOfEmployees': currentEmployees > 0
-                ? currentEmployees - 1
-                : 0,
-            'employeeIds': FieldValue.arrayRemove([employeeId]),
-          });
-        }
-      }
+  //         transaction.update(companyRef, {
+  //           'numberOfEmployees': currentEmployees > 0
+  //               ? currentEmployees - 1
+  //               : 0,
+  //           'employeeIds': FieldValue.arrayRemove([employeeId]),
+  //         });
+  //       }
+  //     }
+  //   });
+  // }
+
+Future<void> deleteEmployee(String employeeId) async {
+  final userRef = firebase.collection('users').doc(employeeId);
+  final userDoc = await userRef.get();
+  final companyId = userDoc.data()?['companyId'] as String?;
+
+  final batch = firebase.batch();
+  batch.delete(userRef);
+  if (companyId != null && companyId.isNotEmpty) {
+    batch.update(firebase.collection('companies').doc(companyId), {
+      'employeeCount': FieldValue.increment(-1),
     });
   }
+  await batch.commit();
+}
 
   Future<void> updateEmployeeName(String employeeId, String newName) {
     return firebase.collection('users').doc(employeeId).update({

@@ -207,8 +207,7 @@ class _AdministratorDashboard extends StatelessWidget {
                 _AdminCard(
                   icon: Icons.money,
                   title: 'Connect to Quickbooks',
-                  subtitle:
-                      'connect to quickbooks and change quickbooks connection settings',
+                  subtitle: '',
                   color: Colors.blue,
                   onTap: () {
                     Navigator.pushNamed(context, '/QuickbooksConnection');

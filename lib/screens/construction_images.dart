@@ -363,7 +363,7 @@ class _ConstructionImagesState extends State<ConstructionImages> {
             final data = doc.data();
             final path = data['imagePath'] as String? ?? '';
             final uploadedBy = data['uploadedBy'] as String?;
-            final uploadedByName = services.getUserNameByUid(uploadedBy);
+            final uploadedByName = services.getUserNameByUid(uploadedBy!);
             final uploadedAt = data['uploadedAt'] as String;
             final note = data['note'] as String;
             final canDelete =
