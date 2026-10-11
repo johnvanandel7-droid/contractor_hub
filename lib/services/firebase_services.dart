@@ -31,10 +31,7 @@ class FirebaseServices {
   Stream<DocumentSnapshot<Map<String, dynamic>>> companyStream(
     String companyId,
   ) {
-    return firebase
-        .collection('companies')
-        .doc(companyId)
-        .snapshots();
+    return firebase.collection('companies').doc(companyId).snapshots();
   }
 
   Future<Map<String, dynamic>?> getUser(String uid) async {
@@ -221,8 +218,7 @@ class FirebaseServices {
       transaction.delete(userRef);
 
       if (companyId != null) {
-        final companyRef =
-            firebase.collection('companies').doc(companyId);
+        final companyRef = firebase.collection('companies').doc(companyId);
 
         final companySnapshot = await transaction.get(companyRef);
 
@@ -233,8 +229,9 @@ class FirebaseServices {
               (companyData?['numberOfEmployees'] ?? 0) as int;
 
           transaction.update(companyRef, {
-            'numberOfEmployees':
-                currentEmployees > 0 ? currentEmployees - 1 : 0,
+            'numberOfEmployees': currentEmployees > 0
+                ? currentEmployees - 1
+                : 0,
             'employeeIds': FieldValue.arrayRemove([employeeId]),
           });
         }
@@ -281,8 +278,7 @@ class FirebaseServices {
       transaction.delete(userRef);
 
       if (companyId != null) {
-        final companyRef =
-            firebase.collection('companies').doc(companyId);
+        final companyRef = firebase.collection('companies').doc(companyId);
 
         final companySnapshot = await transaction.get(companyRef);
 
@@ -293,8 +289,9 @@ class FirebaseServices {
               (companyData?['numberOfEmployees'] ?? 0) as int;
 
           transaction.update(companyRef, {
-            'numberOfEmployees':
-                currentEmployees > 0 ? currentEmployees - 1 : 0,
+            'numberOfEmployees': currentEmployees > 0
+                ? currentEmployees - 1
+                : 0,
             'employeeIds': FieldValue.arrayRemove([uid]),
           });
         }

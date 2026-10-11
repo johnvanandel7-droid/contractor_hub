@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/components/app_bar.dart';
+import 'package:contractor_hub/components/time_ago.dart';
 import 'package:contractor_hub/constants.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -109,6 +110,7 @@ class _ConstructionImagesState extends State<ConstructionImages> {
   }
 
   Future<void> _addImages(String jobId) async {
+    String? note;
     if (_companyId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not determine your company')),
@@ -137,6 +139,18 @@ class _ConstructionImagesState extends State<ConstructionImages> {
         content: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
+            SizedBox(height: 10),
+            Text('Add Note'),
+            SizedBox(height: 3),
+            TextField(
+              decoration: kInputDecoration.copyWith(
+                hintText: 'image of ductwork',
+              ),
+              onChanged: (value) {
+                setState() => note = value;
+              },
+            ),
+            SizedBox(height: 15),
             OutlinedButton.icon(
               onPressed: () =>
                   Navigator.pop(dialogContext, ImageSource.gallery),
@@ -147,6 +161,13 @@ class _ConstructionImagesState extends State<ConstructionImages> {
               onPressed: () => Navigator.pop(dialogContext, ImageSource.camera),
               icon: const Icon(Icons.camera_alt),
               label: const Text('Camera'),
+            ),
+            SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: Text('Cancel'),
             ),
           ],
         ),
@@ -165,6 +186,7 @@ class _ConstructionImagesState extends State<ConstructionImages> {
         'imagePath': picked.path,
         'uploadedAt': FieldValue.serverTimestamp(),
         'uploadedBy': auth.currentUser?.uid,
+        'note': note,
       });
     } catch (e) {
       if (!mounted) return;
@@ -341,13 +363,15 @@ class _ConstructionImagesState extends State<ConstructionImages> {
             final data = doc.data();
             final path = data['imagePath'] as String? ?? '';
             final uploadedBy = data['uploadedBy'] as String?;
+            final uploadedByName = services.getUserNameByUid(uploadedBy);
+            final uploadedAt = data['uploadedAt'] as String;
+            final note = data['note'] as String;
             final canDelete =
                 uploadedBy != null && uploadedBy == auth.currentUser?.uid;
 
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Stack(
-                fit: StackFit.expand,
+            return Container(
+              decoration: kboxDecoration,
+              child: Column(
                 children: [
                   // NOTE: imagePath is the local device path of whoever
                   // uploaded it, so it only renders on that same device.
@@ -382,6 +406,18 @@ class _ConstructionImagesState extends State<ConstructionImages> {
                         ),
                       ),
                     ),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text('uploaded at: ${formatTimeAgo(uploadedAt)}'),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text('Uploaded By: $uploadedByName'),
+                  ),
+                  Text(
+                    note,
+                    style: TextStyle(fontSize: 20, color: Colors.grey),
+                  ),
                 ],
               ),
             );
