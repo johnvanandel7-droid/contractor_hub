@@ -11,14 +11,17 @@ class ReusableIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      icon: icon,
-      onPressed: onPressed,
-      color: iconColor,
-      iconSize: 30,
-      highlightColor: Colors.grey[800],
-      onLongPress: onPressed,
-      padding: EdgeInsets.all(10),
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: IconButton(
+        icon: icon,
+        onPressed: onPressed,
+        color: iconColor,
+        iconSize: 30,
+        highlightColor: Colors.grey[800],
+        onLongPress: onPressed,
+        padding: EdgeInsets.all(10),
+      ),
     );
   }
 }

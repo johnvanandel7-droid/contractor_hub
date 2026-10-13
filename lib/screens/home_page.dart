@@ -1,3 +1,4 @@
+import 'package:contractor_hub/components/admin_card.dart';
 import 'package:flutter/material.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:contractor_hub/components/app_bar.dart';
@@ -90,77 +91,83 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                  if (!isEmployee) ...[
-                    ReusableButton(
-                      buttonText: 'Administrator panel',
-                      onPress: () {
-                        Navigator.pushNamed(context, '/administratorPanel');
-                      },
-                      buttonHeight: 40,
-                      buttonWidth: double.infinity,
-                      buttonColor: Colors.yellow,
-                      buttonPadding: 8,
-                    ),
-                  ],
-                  ReusableButton(
-                    buttonText: 'Clock In / Out',
-                    onPress: () {
-                      Navigator.pushNamed(context, '/clockInOut');
-                    },
-                    buttonHeight: 40,
-                    buttonWidth: double.infinity,
-                    buttonColor: Colors.purple,
-                    buttonPadding: 8,
-                  ),
-                  ReusableButton(
-                    buttonText: 'ToDo List',
-                    onPress: () {
-                      Navigator.pushNamed(context, '/toDoList');
-                    },
-                    buttonHeight: 40,
-                    buttonWidth: double.infinity,
-                    buttonColor: Colors.blue,
-                    buttonPadding: 8,
-                  ),
-                  ReusableButton(
-                    buttonText: 'Expense tracker',
-                    onPress: () {
-                      Navigator.pushNamed(context, '/expenseTracker');
-                    },
-                    buttonHeight: 40,
-                    buttonWidth: double.infinity,
-                    buttonColor: Colors.blueGrey,
-                    buttonPadding: 8,
-                  ),
-                  ReusableButton(
-                    buttonText: 'Construction Images',
-                    onPress: () {
-                      Navigator.pushNamed(context, '/constructionImages');
-                    },
-                    buttonHeight: 40,
-                    buttonWidth: double.infinity,
-                    buttonColor: Colors.blue,
-                    buttonPadding: 8,
-                  ),
-                  ReusableButton(
-                    buttonText: 'Contacts',
-                    onPress: () {
-                      Navigator.pushNamed(context, '/contacts');
-                    },
-                    buttonHeight: 40,
-                    buttonWidth: double.infinity,
-                    buttonColor: Colors.blue,
-                    buttonPadding: 8,
-                  ),
-                  ReusableButton(
-                    buttonText: 'Work Stats',
-                    onPress: () {
-                      Navigator.pushNamed(context, '/workStats');
-                    },
-                    buttonHeight: 40,
-                    buttonWidth: double.infinity,
-                    buttonColor: Colors.blue,
-                    buttonPadding: 8,
+                  GridView.count(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    childAspectRatio: 1.05,
+                    children: [
+                      if (!isEmployee) ...[
+                        AdminCard(
+                          icon: Icons.admin_panel_settings,
+                          title: 'Administration panel',
+                          subtitle: 'Edit company secure info',
+                          color: Colors.blue,
+                          onTap: () {
+                            Navigator.pushNamed(
+                              context,
+                              '/administrationPanel',
+                            );
+                          },
+                        ),
+                      ],
+                      AdminCard(
+                        icon: Icons.punch_clock,
+                        title: 'Clock In / Out',
+                        subtitle: 'Record Shift lengths',
+                        color: Colors.blue,
+                        onTap: () {
+                          Navigator.pushNamed(context, '/clockInOut');
+                        },
+                      ),
+                      AdminCard(
+                        icon: Icons.check_box,
+                        title: 'ToDo List',
+                        subtitle: 'create and check off toDoItems',
+                        color: Colors.blue,
+                        onTap: () {
+                          Navigator.pushNamed(context, '/toDoList');
+                        },
+                      ),
+                      AdminCard(
+                        icon: Icons.price_change,
+                        title: 'Expense Tracker',
+                        subtitle: 'log company or personal expenses',
+                        color: Colors.blue,
+                        onTap: () {
+                          Navigator.pushNamed(context, '/expenseTracker');
+                        },
+                      ),
+                      AdminCard(
+                        icon: Icons.image,
+                        title: 'Company Images',
+                        subtitle: 'images of jobs',
+                        color: Colors.blue,
+                        onTap: () {
+                          Navigator.pushNamed(context, '/constructionImages');
+                        },
+                      ),
+                      AdminCard(
+                        icon: Icons.contact_phone,
+                        title: 'Contacts',
+                        subtitle: 'Company Contacts',
+                        color: Colors.blue,
+                        onTap: () {
+                          Navigator.pushNamed(context, '/contacts');
+                        },
+                      ),
+                      AdminCard(
+                        icon: Icons.query_stats,
+                        title: 'Work Stats',
+                        subtitle: 'graphs + recent shifts',
+                        color: Colors.blue,
+                        onTap: () {
+                          Navigator.pushNamed(context, '/workStats');
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),

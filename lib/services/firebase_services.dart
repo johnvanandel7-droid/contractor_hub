@@ -44,7 +44,7 @@ class FirebaseServices {
     return firebase.collection('users').doc(uid).snapshots();
   }
 
-    Future<String?> getUserNameByUid(String userId) async {
+  Future<String?> getUserNameByUid(String userId) async {
     try {
       final userDoc = await firebase.collection('users').doc(userId).get();
       final name = userDoc.data()?['name'] as String?;
@@ -249,20 +249,20 @@ class FirebaseServices {
   //   });
   // }
 
-Future<void> deleteEmployee(String employeeId) async {
-  final userRef = firebase.collection('users').doc(employeeId);
-  final userDoc = await userRef.get();
-  final companyId = userDoc.data()?['companyId'] as String?;
+  Future<void> deleteEmployee(String employeeId) async {
+    final userRef = firebase.collection('users').doc(employeeId);
+    final userDoc = await userRef.get();
+    final companyId = userDoc.data()?['companyId'] as String?;
 
-  final batch = firebase.batch();
-  batch.delete(userRef);
-  if (companyId != null && companyId.isNotEmpty) {
-    batch.update(firebase.collection('companies').doc(companyId), {
-      'employeeCount': FieldValue.increment(-1),
-    });
+    final batch = firebase.batch();
+    batch.delete(userRef);
+    if (companyId != null && companyId.isNotEmpty) {
+      batch.update(firebase.collection('companies').doc(companyId), {
+        'employeeCount': FieldValue.increment(-1),
+      });
+    }
+    await batch.commit();
   }
-  await batch.commit();
-}
 
   Future<void> updateEmployeeName(String employeeId, String newName) {
     return firebase.collection('users').doc(employeeId).update({

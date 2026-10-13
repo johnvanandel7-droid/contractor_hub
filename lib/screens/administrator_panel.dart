@@ -1,6 +1,7 @@
 import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:flutter/material.dart';
+import 'package:contractor_hub/components/admin_card.dart';
 
 final services = FirebaseServices.instance;
 
@@ -170,7 +171,7 @@ class _AdministratorDashboard extends StatelessWidget {
               physics: const NeverScrollableScrollPhysics(),
               childAspectRatio: 1.05,
               children: [
-                _AdminCard(
+                AdminCard(
                   icon: Icons.people_alt_outlined,
                   title: 'Employees',
                   subtitle: employeeLimit > 0
@@ -182,7 +183,7 @@ class _AdministratorDashboard extends StatelessWidget {
                   },
                 ),
 
-                _AdminCard(
+                AdminCard(
                   icon: Icons.work_outline,
                   title: 'Jobs',
                   subtitle: 'Manage job sites',
@@ -192,7 +193,7 @@ class _AdministratorDashboard extends StatelessWidget {
                   },
                 ),
 
-                _AdminCard(
+                AdminCard(
                   icon: Icons.folder_outlined,
                   title: 'Files',
                   subtitle: imageLimit > 0
@@ -204,7 +205,7 @@ class _AdministratorDashboard extends StatelessWidget {
                   },
                 ),
 
-                _AdminCard(
+                AdminCard(
                   icon: Icons.money,
                   title: 'Connect to Quickbooks',
                   subtitle: '',
@@ -214,7 +215,7 @@ class _AdministratorDashboard extends StatelessWidget {
                   },
                 ),
 
-                _AdminCard(
+                AdminCard(
                   icon: Icons.person_add_alt_1,
                   title: 'Join Requests',
                   subtitle: pendingCount == 0
@@ -260,114 +261,6 @@ class _AdministratorDashboard extends StatelessWidget {
       default:
         return 'Small Business';
     }
-  }
-}
-
-class _AdminCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final int badgeCount;
-  final VoidCallback onTap;
-
-  const _AdminCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-    this.badgeCount = 0,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.grey[200]!),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Icon(icon, color: color, size: 28),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 4),
-
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                ],
-              ),
-
-              if (badgeCount > 0)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    constraints: const BoxConstraints(
-                      minWidth: 26,
-                      minHeight: 26,
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 7),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      badgeCount > 99 ? '99+' : badgeCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
