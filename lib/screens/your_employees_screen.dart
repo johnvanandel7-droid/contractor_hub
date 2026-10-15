@@ -1,217 +1,495 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/time_ago.dart';
-import 'package:contractor_hub/constants.dart';
-import 'package:contractor_hub/screens/to_do_list.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:flutter/material.dart';
-
+ 
 final _services = FirebaseServices.instance;
-
+ 
+// ───────────────────────────── helpers ─────────────────────────────
+ 
+/// Length of one clock record. Open shifts (no clockOutTime) count up to now.
+Duration _shiftDuration(Map<String, dynamic> d, DateTime now) {
+  final start = (d['clockInTime'] as Timestamp?)?.toDate();
+  if (start == null) return Duration.zero; // server timestamp not resolved yet
+  final end = (d['clockOutTime'] as Timestamp?)?.toDate() ?? now;
+  final dur = end.difference(start);
+  return dur.isNegative ? Duration.zero : dur;
+}
+ 
+String _fmt(Duration d) {
+  final h = d.inHours;
+  final m = d.inMinutes.remainder(60);
+  return m == 0 ? '${h}h' : '${h}h ${m}m';
+}
+ 
+class _Totals {
+  Duration d7 = Duration.zero;
+  Duration d14 = Duration.zero;
+  Duration d90 = Duration.zero;
+  Duration all = Duration.zero;
+  bool onClock = false;
+}
+ 
+/// One pass over the records fills every bucket.
+_Totals _totals(List<Map<String, dynamic>> records, DateTime now) {
+  final t = _Totals();
+  final c7 = now.subtract(const Duration(days: 7));
+  final c14 = now.subtract(const Duration(days: 14));
+  final c90 = now.subtract(const Duration(days: 90));
+  for (final r in records) {
+    final start = (r['clockInTime'] as Timestamp?)?.toDate();
+    if (start == null) continue;
+    if (r['clockOutTime'] == null) t.onClock = true;
+    final dur = _shiftDuration(r, now);
+    t.all += dur;
+    if (start.isAfter(c90)) t.d90 += dur;
+    if (start.isAfter(c14)) t.d14 += dur;
+    if (start.isAfter(c7)) t.d7 += dur;
+  }
+  return t;
+}
+ 
+// ───────────────────────────── screen ─────────────────────────────
+ 
 class YourEmployeesScreen extends StatelessWidget {
   const YourEmployeesScreen({super.key});
-
+ 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBarWidget(),
-      body: Column(
-        children: [
-          Text('Your Employees', style: TextStyle(fontSize: 20)),
-          SizedBox(height: 20),
-          Expanded(child: DisplayEmployeeList()),
-        ],
-      ),
+      appBar: const AppBarWidget(title: 'Your Employees'),
+      backgroundColor: Colors.grey[100],
+      body: const DisplayEmployeeList(),
     );
   }
 }
-
+ 
 class DisplayEmployeeList extends StatelessWidget {
   const DisplayEmployeeList({super.key});
-
+ 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _services.streamYourEmployees(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.hasError) {
+          debugPrint('employees stream error: ${snapshot.error}');
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Error: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.red)),
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError) {
-          print(snapshot.error);
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
           return const Center(child: Text('No employees yet'));
         }
-
-        final docs = snapshot.data!.docs;
-        final List<EmployeeInfoContainer> employees = [];
-
-        for (final doc in docs) {
-          try {
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: docs.length,
+          itemBuilder: (context, i) {
+            final doc = docs[i];
             final data = doc.data();
-            final name = data['name'] as String? ?? 'Unknown';
-            final hiredAt = data['createdAt'] as Timestamp?;
-
-            employees.add(
-              EmployeeInfoContainer(name: name, hiredAt: hiredAt, uid: doc.id),
+            return EmployeeCard(
+              key: ValueKey(doc.id),
+              uid: doc.id,
+              name: data['name'] as String? ?? 'Unknown',
+              hiredAt: data['createdAt'] as Timestamp?,
+              isBoss: data['isEmployee'] == false,
+              isPending: data['status'] == 'pending',
             );
-          } catch (e) {
-            debugPrint('error parsing employees :::::$e');
-            continue;
-          }
-        }
-
-        return ListView(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          children: employees,
+          },
         );
       },
     );
   }
 }
-
-class EmployeeInfoContainer extends StatefulWidget {
-  final String name;
-  Timestamp? hiredAt;
+ 
+class EmployeeCard extends StatefulWidget {
   final String uid;
-
-  EmployeeInfoContainer({
+  final String name;
+  final Timestamp? hiredAt;
+  final bool isBoss;
+  final bool isPending;
+ 
+  const EmployeeCard({
     super.key,
-    required this.name,
-    this.hiredAt,
     required this.uid,
+    required this.name,
+    required this.hiredAt,
+    required this.isBoss,
+    required this.isPending,
   });
-
+ 
   @override
-  State<EmployeeInfoContainer> createState() => _EmployeeInfoContainerState();
+  State<EmployeeCard> createState() => _EmployeeCardState();
 }
-
-class _EmployeeInfoContainerState extends State<EmployeeInfoContainer> {
-  _editEmployee() async {
-    final controller = TextEditingController();
-
-    await showDialog(
+ 
+class _EmployeeCardState extends State<EmployeeCard> {
+  bool _expanded = false;
+ 
+  Future<void> _edit() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (_) => _EditNameDialog(current: widget.name),
+    );
+    if (newName == null || newName == widget.name) return;
+    try {
+      await _services.updateEmployeeName(widget.uid, newName);
+      messenger.showSnackBar(SnackBar(content: Text('Renamed to $newName')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Failed to update name: $e')));
+    }
+  }
+ 
+  /// Returns after the delete finishes (or fails). Used by both the button
+  /// and the swipe gesture.
+  Future<void> _delete() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Edit ${widget.name}\'s account'),
-        constraints: BoxConstraints(maxHeight: 400),
-        content: Column(
-          children: [
-            Text('edit name'),
-            TextField(
-              decoration: kInputDecoration.copyWith(hintText: 'New Name'),
-              controller: controller,
-            ),
-          ],
+        title: Text('Delete ${widget.name}?'),
+        content: const Text(
+          'This removes their account and login and frees up a seat. '
+          'Their past clock records are kept. This cannot be undone.',
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: Text('cancel'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              final newName = controller.text.trim();
-              if (newName.isEmpty) return;
-              try {
-                await _services.updateEmployeeName(widget.uid, newName);
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-              } catch (e) {
-                if (dialogContext.mounted) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    SnackBar(content: Text('Failed to update name: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('save'),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
+    if (ok != true) return;
+    try {
+      await _services.deleteEmployee(widget.uid);
+      messenger.showSnackBar(SnackBar(content: Text('${widget.name} deleted')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+    }
   }
-
-  _confirmDelete() async {
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('confirm delete of ${widget.name}'),
-        constraints: BoxConstraints(maxHeight: 400),
-        content: Column(
+ 
+  @override
+  Widget build(BuildContext context) {
+    final initial = widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?';
+ 
+    final card = Card(
+      margin: EdgeInsets.zero,
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: Colors.blueGrey[100],
+                    child: Text(initial),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.name,
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.hiredAt == null
+                              ? 'Joined: unknown'
+                              : 'Joined ${formatTimeAgo(widget.hiredAt)}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (widget.isBoss)
+                    const Chip(
+                        label: Text('Boss'), visualDensity: VisualDensity.compact),
+                  if (widget.isPending)
+                    const Chip(
+                        label: Text('Pending'),
+                        visualDensity: VisualDensity.compact),
+                  Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _edit,
+                        icon: const Icon(Icons.edit, size: 18),
+                        label: const Text('Edit name'),
+                      ),
+                      const SizedBox(width: 8),
+                      if (!widget.isBoss)
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red),
+                          onPressed: _delete,
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text('Delete'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _HoursPanel(uid: widget.uid),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+ 
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: widget.isBoss
+          ? card
+          : Dismissible(
+              key: ValueKey('dismiss-${widget.uid}'),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.delete, color: Colors.white),
+              ),
+              // Run the delete ourselves and always return false: the
+              // Firestore stream removes the row when the doc is gone, so a
+              // failed delete never leaves the list out of sync.
+              confirmDismiss: (_) async {
+                await _delete();
+                return false;
+              },
+              child: card,
+            ),
+    );
+  }
+}
+ 
+class _EditNameDialog extends StatefulWidget {
+  final String current;
+  const _EditNameDialog({required this.current});
+ 
+  @override
+  State<_EditNameDialog> createState() => _EditNameDialogState();
+}
+ 
+class _EditNameDialogState extends State<_EditNameDialog> {
+  late final _controller = TextEditingController(text: widget.current);
+ 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+ 
+  void _save() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    Navigator.pop(context, text);
+  }
+ 
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit name'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        decoration: const InputDecoration(
+          labelText: 'Name',
+          border: OutlineInputBorder(),
+        ),
+        onSubmitted: (_) => _save(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
+  }
+}
+ 
+// ───────────────────────────── hours ─────────────────────────────
+ 
+/// Loads lazily (only once the card is expanded). One query covers 7, 14 and
+/// 90 days; "All time" is a second query that runs only if tapped, because
+/// it can be large.
+class _HoursPanel extends StatefulWidget {
+  final String uid;
+  const _HoursPanel({required this.uid});
+ 
+  @override
+  State<_HoursPanel> createState() => _HoursPanelState();
+}
+ 
+class _HoursPanelState extends State<_HoursPanel> {
+  late Future<List<Map<String, dynamic>>> _recent;
+  Future<List<Map<String, dynamic>>>? _all;
+ 
+  @override
+  void initState() {
+    super.initState();
+    _loadRecent();
+  }
+ 
+  void _loadRecent() {
+    _recent = _services.employeeClockRecords(
+      widget.uid,
+      since: DateTime.now().subtract(const Duration(days: 90)),
+    );
+  }
+ 
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _recent,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.all(8),
+            child: Center(
+                child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2))),
+          );
+        }
+        if (snap.hasError) {
+          debugPrint('hours load failed: ${snap.error}');
+          return Text(
+            'Could not load hours: ${snap.error}\n'
+            '(If this mentions an index, open the link in the message to create it.)',
+            style: const TextStyle(color: Colors.red, fontSize: 12),
+          );
+        }
+ 
+        final now = DateTime.now();
+        final t = _totals(snap.data!, now);
+ 
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Delete ${widget.name}'),
             Row(
               children: [
-                Spacer(),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: Text('cancel'),
-                ),
-                Spacer(),
-                TextButton(
-                  onPressed: () async {
-                    try {
-                      await _services.deleteEmployee(widget.uid);
-                      if (context.mounted) Navigator.pop(context);
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to delete: $e')),
-                        );
-                      }
-                    }
-                  },
-                  child: Text('delete'),
+                const Text('Hours worked',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                if (t.onClock) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.circle, size: 10, color: Colors.green),
+                  const SizedBox(width: 4),
+                  const Text('on the clock now',
+                      style: TextStyle(fontSize: 12, color: Colors.green)),
+                ],
+                const Spacer(),
+                IconButton(
+                  tooltip: 'Refresh',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: () => setState(() {
+                    _all = null;
+                    _loadRecent();
+                  }),
                 ),
               ],
             ),
+            Row(
+              children: [
+                _tile('7 days', _fmt(t.d7)),
+                _tile('14 days', _fmt(t.d14)),
+                _tile('90 days', _fmt(t.d90)),
+                _allTile(now),
+              ],
+            ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.all(10),
-      child: Container(
-        decoration: kboxDecoration,
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Text(widget.name),
-                  SizedBox(width: 15),
-                  Text(
-                    widget.hiredAt == null
-                        ? 'Unknown'
-                        : formatTimeAgo(widget.hiredAt),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  Spacer(),
-                  IconButton(onPressed: _editEmployee, icon: Icon(Icons.edit)),
-                  Spacer(),
-                  IconButton(
-                    onPressed: () {
-                      _confirmDelete();
-                    },
-                    icon: Icon(Icons.delete),
-                  ),
-                ],
-              ),
-            ],
+ 
+  Widget _allTile(DateTime now) {
+    if (_all == null) {
+      return _tile('All time', 'Tap to load',
+          onTap: () => setState(() {
+                _all = _services.employeeClockRecords(widget.uid);
+              }));
+    }
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _all,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return _tile('All time', '…');
+        }
+        if (snap.hasError) {
+          return _tile('All time', 'Error',
+              onTap: () => setState(() => _all = null));
+        }
+        return _tile('All time', _fmt(_totals(snap.data!, now).all));
+      },
+    );
+  }
+ 
+  Widget _tile(String label, String value, {VoidCallback? onTap}) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            decoration: BoxDecoration(
+              color: Colors.blueGrey[50],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                FittedBox(
+                  child: Text(value,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 2),
+                Text(label,
+                    style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+              ],
+            ),
           ),
         ),
       ),

@@ -82,7 +82,7 @@ class _HomePageState extends State<HomePage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
-                    padding: EdgeInsets.all(5),
+                    padding: EdgeInsets.fromLTRB(35, 5, 35, 5),
                     child: Text(
                       'Hi $userName',
                       style: TextStyle(
@@ -102,13 +102,13 @@ class _HomePageState extends State<HomePage> {
                       if (!isEmployee) ...[
                         AdminCard(
                           icon: Icons.admin_panel_settings,
-                          title: 'Administration panel',
+                          title: 'Admin panel',
                           subtitle: 'Edit company secure info',
                           color: Colors.blue,
                           onTap: () {
                             Navigator.pushNamed(
                               context,
-                              '/administrationPanel',
+                              '/administratorPanel',
                             );
                           },
                         ),

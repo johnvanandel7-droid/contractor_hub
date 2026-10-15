@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 final firebase = FirebaseFirestore.instance;
 final auth = FirebaseAuth.instance;
@@ -92,6 +93,29 @@ class FirebaseServices {
     }
   }
 
+  Future<List<Map<String, dynamic>>> companyMembers(String companyId) async {
+    final snap = await firebase
+        .collection('users')
+        .where('companyId', isEqualTo: companyId)
+        .get();
+    final members =
+        snap.docs
+            .where((d) => d.data()['status'] != 'pending')
+            .map(
+              (d) => {
+                'id': d.id,
+                'name': d.data()['name'] as String? ?? 'Unknown',
+              },
+            )
+            .toList()
+          ..sort(
+            (a, b) => (a['name'] as String).toLowerCase().compareTo(
+              (b['name'] as String).toLowerCase(),
+            ),
+          );
+    return members;
+  }
+
   // ---------------- JOB SITES ----------------
   // A jobsite is a lat/lng + radius (in meters) that defines the geofence
   // employees must be inside to be considered "at work".
@@ -122,6 +146,17 @@ class FirebaseServices {
       'createdAt': FieldValue.serverTimestamp(),
       'jobImages': [],
     });
+  }
+
+  Future<void> updateJobSite(String jobId, Map<String, dynamic> fields) {
+    return firebase.collection('jobsites').doc(jobId).update({
+      ...fields,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> deleteJobSite(String jobId) {
+    return firebase.collection('jobsites').doc(jobId).delete();
   }
 
   // ---------------- CLOCK RECORDS ----------------
@@ -213,61 +248,39 @@ class FirebaseServices {
         .snapshots();
   }
 
-  // Future<void> deleteEmployee(String employeeId) async {
-  //   final userRef = firebase.collection('users').doc(employeeId);
-  //   final userDoc = await userRef.get();
-
-  //   if (!userDoc.exists) {
-  //     return;
-  //   }
-
-  //   final data = userDoc.data();
-  //   final companyId = data?['companyId'] as String?;
-
-  //   await firebase.runTransaction((transaction) async {
-  //     transaction.delete(userRef);
-
-  //     if (companyId != null) {
-  //       final companyRef = firebase.collection('companies').doc(companyId);
-
-  //       final companySnapshot = await transaction.get(companyRef);
-
-  //       if (companySnapshot.exists) {
-  //         final companyData = companySnapshot.data();
-
-  //         final currentEmployees =
-  //             (companyData?['numberOfEmployees'] ?? 0) as int;
-
-  //         transaction.update(companyRef, {
-  //           'numberOfEmployees': currentEmployees > 0
-  //               ? currentEmployees - 1
-  //               : 0,
-  //           'employeeIds': FieldValue.arrayRemove([employeeId]),
-  //         });
-  //       }
-  //     }
-  //   });
-  // }
-
   Future<void> deleteEmployee(String employeeId) async {
-    final userRef = firebase.collection('users').doc(employeeId);
-    final userDoc = await userRef.get();
-    final companyId = userDoc.data()?['companyId'] as String?;
-
-    final batch = firebase.batch();
-    batch.delete(userRef);
-    if (companyId != null && companyId.isNotEmpty) {
-      batch.update(firebase.collection('companies').doc(companyId), {
-        'employeeCount': FieldValue.increment(-1),
-      });
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('deleteEmployeeAccount')
+          .call({'employeeId': employeeId});
+    } on FirebaseFunctionsException catch (e) {
+      // Surfaces the function's own message (e.g. "You can't delete a boss
+      // account.") in the SnackBar your screen already shows.
+      throw Exception(e.message ?? e.code);
     }
-    await batch.commit();
   }
 
   Future<void> updateEmployeeName(String employeeId, String newName) {
     return firebase.collection('users').doc(employeeId).update({
       'name': newName,
     });
+  }
+
+  Future<List<Map<String, dynamic>>> employeeClockRecords(
+    String employeeId, {
+    DateTime? since,
+  }) async {
+    Query<Map<String, dynamic>> q = firebase
+        .collection('clockRecords')
+        .where('uid', isEqualTo: employeeId);
+    if (since != null) {
+      q = q.where(
+        'clockInTime',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(since),
+      );
+    }
+    final snap = await q.get();
+    return snap.docs.map((d) => d.data()).toList();
   }
 
   // ---------------- JOIN REQUESTS ----------------

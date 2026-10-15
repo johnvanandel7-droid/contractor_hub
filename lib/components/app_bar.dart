@@ -350,7 +350,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(34),
             child: SizedBox(
-              height: 34,
+              height: 50,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -379,10 +379,8 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
                             count: count,
                             child: const Icon(Icons.person_add_alt_1),
                           ),
-                          onPressed: () => Navigator.pushNamed(
-                            context,
-                            _kJoinRequestsRoute,
-                          ),
+                          onPressed: () =>
+                              Navigator.pushNamed(context, _kJoinRequestsRoute),
                         );
                       },
                     ),
