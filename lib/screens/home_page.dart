@@ -77,99 +77,102 @@ class _HomePageState extends State<HomePage> {
             final bool isEmployee = user['isEmployee'] as bool? ?? true;
 
             return SingleChildScrollView(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(35, 5, 35, 5),
-                    child: Text(
-                      'Hi $userName',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(35, 5, 35, 5),
+                      child: Text(
+                        'Hi $userName',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 1.05,
-                    children: [
-                      if (!isEmployee) ...[
+                    GridView.count(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      childAspectRatio: 1.05,
+                      children: [
+                        if (!isEmployee) ...[
+                          AdminCard(
+                            icon: Icons.admin_panel_settings,
+                            title: 'Admin panel',
+                            subtitle: 'Edit company secure info',
+                            color: Colors.blue,
+                            onTap: () {
+                              Navigator.pushNamed(
+                                context,
+                                '/administratorPanel',
+                              );
+                            },
+                          ),
+                        ],
                         AdminCard(
-                          icon: Icons.admin_panel_settings,
-                          title: 'Admin panel',
-                          subtitle: 'Edit company secure info',
+                          icon: Icons.punch_clock,
+                          title: 'Clock In / Out',
+                          subtitle: 'Record Shift lengths',
                           color: Colors.blue,
                           onTap: () {
-                            Navigator.pushNamed(
-                              context,
-                              '/administratorPanel',
-                            );
+                            Navigator.pushNamed(context, '/clockInOut');
+                          },
+                        ),
+                        AdminCard(
+                          icon: Icons.check_box,
+                          title: 'ToDo List',
+                          subtitle: 'create and check off toDoItems',
+                          color: Colors.blue,
+                          onTap: () {
+                            Navigator.pushNamed(context, '/toDoList');
+                          },
+                        ),
+                        AdminCard(
+                          icon: Icons.price_change,
+                          title: 'Expense Tracker',
+                          subtitle: 'log company or personal expenses',
+                          color: Colors.blue,
+                          onTap: () {
+                            Navigator.pushNamed(context, '/expenseTracker');
+                          },
+                        ),
+                        AdminCard(
+                          icon: Icons.image,
+                          title: 'Company Images',
+                          subtitle: 'images of jobs',
+                          color: Colors.blue,
+                          onTap: () {
+                            Navigator.pushNamed(context, '/constructionImages');
+                          },
+                        ),
+                        AdminCard(
+                          icon: Icons.contact_phone,
+                          title: 'Contacts',
+                          subtitle: 'Company Contacts',
+                          color: Colors.blue,
+                          onTap: () {
+                            Navigator.pushNamed(context, '/contacts');
+                          },
+                        ),
+                        AdminCard(
+                          icon: Icons.query_stats,
+                          title: 'Work Stats',
+                          subtitle: 'graphs + recent shifts',
+                          color: Colors.blue,
+                          onTap: () {
+                            Navigator.pushNamed(context, '/workStats');
                           },
                         ),
                       ],
-                      AdminCard(
-                        icon: Icons.punch_clock,
-                        title: 'Clock In / Out',
-                        subtitle: 'Record Shift lengths',
-                        color: Colors.blue,
-                        onTap: () {
-                          Navigator.pushNamed(context, '/clockInOut');
-                        },
-                      ),
-                      AdminCard(
-                        icon: Icons.check_box,
-                        title: 'ToDo List',
-                        subtitle: 'create and check off toDoItems',
-                        color: Colors.blue,
-                        onTap: () {
-                          Navigator.pushNamed(context, '/toDoList');
-                        },
-                      ),
-                      AdminCard(
-                        icon: Icons.price_change,
-                        title: 'Expense Tracker',
-                        subtitle: 'log company or personal expenses',
-                        color: Colors.blue,
-                        onTap: () {
-                          Navigator.pushNamed(context, '/expenseTracker');
-                        },
-                      ),
-                      AdminCard(
-                        icon: Icons.image,
-                        title: 'Company Images',
-                        subtitle: 'images of jobs',
-                        color: Colors.blue,
-                        onTap: () {
-                          Navigator.pushNamed(context, '/constructionImages');
-                        },
-                      ),
-                      AdminCard(
-                        icon: Icons.contact_phone,
-                        title: 'Contacts',
-                        subtitle: 'Company Contacts',
-                        color: Colors.blue,
-                        onTap: () {
-                          Navigator.pushNamed(context, '/contacts');
-                        },
-                      ),
-                      AdminCard(
-                        icon: Icons.query_stats,
-                        title: 'Work Stats',
-                        subtitle: 'graphs + recent shifts',
-                        color: Colors.blue,
-                        onTap: () {
-                          Navigator.pushNamed(context, '/workStats');
-                        },
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             );
           },

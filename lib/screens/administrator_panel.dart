@@ -194,18 +194,6 @@ class _AdministratorDashboard extends StatelessWidget {
                 ),
 
                 AdminCard(
-                  icon: Icons.folder_outlined,
-                  title: 'Files',
-                  subtitle: imageLimit > 0
-                      ? '$images / $imageLimit images'
-                      : '$images images',
-                  color: Colors.purple,
-                  onTap: () {
-                    Navigator.pushNamed(context, '/yourFiles');
-                  },
-                ),
-
-                AdminCard(
                   icon: Icons.money,
                   title: 'Quickbooks',
                   subtitle: 'connect quickbooks',

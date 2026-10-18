@@ -28,6 +28,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   String? confirmPassword;
   String deniedEntryReason = '';
   bool isEmployee = true;
+  String? position;
   TextEditingController companyNameController = TextEditingController();
 
   bool _obscurePassword = true;
@@ -113,6 +114,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         showSpinner = false;
       });
       return;
+    }
+
+    if (isEmployee) {
+      if (position == null || position!.trim().isEmpty) {
+        setState(() {
+          deniedEntryReason = 'Please enter your position at the company';
+          showSpinner = false;
+        });
+        return;
+      }
     }
 
     if (!_isValidEmail(email!)) {
@@ -287,6 +298,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             'companyId': finalCompanyId,
             'companyName': finalCompanyName,
             'name': name!.trim(),
+            'position': isEmployee ? position!.trim() : (position?.trim().isNotEmpty == true ? position!.trim() : 'Owner'),
           });
         }
       } catch (innerError) {
@@ -613,6 +625,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         selectedCompanyId = value;
                       }),
                     ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Position at company',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    textCapitalization: TextCapitalization.words,
+                    decoration: kInputDecoration.copyWith(
+                      hintText: isEmployee
+                          ? 'e.g. Carpenter, Electrician, Labourer'
+                          : 'e.g. Owner, Foreman (optional)',
+                      prefixIcon: const Icon(Icons.work_outline),
+                    ),
+                    onChanged: (value) => setState(() => position = value),
+                  ),
                   const SizedBox(height: 16),
                 ],
                 // ---- Owner: creating a brand new company ----

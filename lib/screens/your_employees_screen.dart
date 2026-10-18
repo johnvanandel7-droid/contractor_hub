@@ -3,11 +3,11 @@ import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/time_ago.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:flutter/material.dart';
- 
+
 final _services = FirebaseServices.instance;
- 
+
 // ───────────────────────────── helpers ─────────────────────────────
- 
+
 /// Length of one clock record. Open shifts (no clockOutTime) count up to now.
 Duration _shiftDuration(Map<String, dynamic> d, DateTime now) {
   final start = (d['clockInTime'] as Timestamp?)?.toDate();
@@ -16,13 +16,13 @@ Duration _shiftDuration(Map<String, dynamic> d, DateTime now) {
   final dur = end.difference(start);
   return dur.isNegative ? Duration.zero : dur;
 }
- 
+
 String _fmt(Duration d) {
   final h = d.inHours;
   final m = d.inMinutes.remainder(60);
   return m == 0 ? '${h}h' : '${h}h ${m}m';
 }
- 
+
 class _Totals {
   Duration d7 = Duration.zero;
   Duration d14 = Duration.zero;
@@ -30,7 +30,7 @@ class _Totals {
   Duration all = Duration.zero;
   bool onClock = false;
 }
- 
+
 /// One pass over the records fills every bucket.
 _Totals _totals(List<Map<String, dynamic>> records, DateTime now) {
   final t = _Totals();
@@ -49,12 +49,12 @@ _Totals _totals(List<Map<String, dynamic>> records, DateTime now) {
   }
   return t;
 }
- 
+
 // ───────────────────────────── screen ─────────────────────────────
- 
+
 class YourEmployeesScreen extends StatelessWidget {
   const YourEmployeesScreen({super.key});
- 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -64,10 +64,94 @@ class YourEmployeesScreen extends StatelessWidget {
     );
   }
 }
- 
-class DisplayEmployeeList extends StatelessWidget {
+
+class DisplayEmployeeList extends StatefulWidget {
   const DisplayEmployeeList({super.key});
- 
+
+  @override
+  State<DisplayEmployeeList> createState() => _DisplayEmployeeListState();
+}
+
+class _DisplayEmployeeListState extends State<DisplayEmployeeList> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  /// null = All positions, '__same_as_me__' = same as current user
+  String? _positionFilter;
+  String? _myPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMyPosition();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMyPosition() async {
+    final uid = _services.currentUid;
+    if (uid == null) return;
+    try {
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (!mounted) return;
+      setState(() {
+        _myPosition = (doc.data()?['position'] as String?)?.trim();
+      });
+    } catch (e) {
+      debugPrint('Could not load my position: $e');
+    }
+  }
+
+  /// Search + position filter, then A→Z by name.
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _filterAndSort(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final q = _searchQuery.trim().toLowerCase();
+
+    final filtered = docs.where((doc) {
+      final data = doc.data();
+      final name = (data['name'] as String? ?? '').toLowerCase();
+      final position = (data['position'] as String?)?.trim() ?? '';
+
+      // Name search
+      if (q.isNotEmpty && !name.contains(q)) return false;
+
+      // Position filter
+      if (_positionFilter == null) return true;
+      if (_positionFilter == '__same_as_me__') {
+        if (_myPosition == null || _myPosition!.isEmpty) return false;
+        return position.toLowerCase() == _myPosition!.toLowerCase();
+      }
+      return position.toLowerCase() == _positionFilter!.toLowerCase();
+    }).toList();
+
+    // Alphabetical by name (case-insensitive)
+    filtered.sort((a, b) {
+      final nameA = (a.data()['name'] as String? ?? '').toLowerCase();
+      final nameB = (b.data()['name'] as String? ?? '').toLowerCase();
+      return nameA.compareTo(nameB);
+    });
+
+    return filtered;
+  }
+
+  List<String> _uniquePositions(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final set = <String>{};
+    for (final doc in docs) {
+      final p = (doc.data()['position'] as String?)?.trim() ?? '';
+      if (p.isNotEmpty) set.add(p);
+    }
+    final list = set.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -78,46 +162,161 @@ class DisplayEmployeeList extends StatelessWidget {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('Error: ${snapshot.error}',
-                  style: const TextStyle(color: Colors.red)),
+              child: Text(
+                'Error: ${snapshot.error}',
+                style: const TextStyle(color: Colors.red),
+              ),
             ),
           );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
-          return const Center(child: Text('No employees yet'));
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: docs.length,
-          itemBuilder: (context, i) {
-            final doc = docs[i];
-            final data = doc.data();
-            return EmployeeCard(
-              key: ValueKey(doc.id),
-              uid: doc.id,
-              name: data['name'] as String? ?? 'Unknown',
-              hiredAt: data['createdAt'] as Timestamp?,
-              isBoss: data['isEmployee'] == false,
-              isPending: data['status'] == 'pending',
-            );
-          },
+
+        final allDocs = snapshot.data!.docs;
+        final positions = _uniquePositions(allDocs);
+        final filtered = _filterAndSort(allDocs);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Search bar ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              child: TextField(
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Search employees by name…',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onChanged: (v) => setState(() => _searchQuery = v),
+              ),
+            ),
+
+            // ── Position filter chips ──
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      label: const Text('All'),
+                      selected: _positionFilter == null,
+                      onSelected: (_) =>
+                          setState(() => _positionFilter = null),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      label: Text(
+                        _myPosition != null && _myPosition!.isNotEmpty
+                            ? 'Same as me ($_myPosition)'
+                            : 'Same as me',
+                      ),
+                      selected: _positionFilter == '__same_as_me__',
+                      onSelected: (_) =>
+                          setState(() => _positionFilter = '__same_as_me__'),
+                    ),
+                  ),
+                  ...positions.map((p) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(p),
+                        selected: _positionFilter == p,
+                        onSelected: (_) =>
+                            setState(() => _positionFilter = p),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+
+            // Result count
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: Text(
+                filtered.isEmpty
+                    ? 'No matches'
+                    : '${filtered.length} employee${filtered.length == 1 ? '' : 's'}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ),
+
+            // ── Alphabetical list ──
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Text(
+                        allDocs.isEmpty
+                            ? 'No employees yet'
+                            : 'No employees match your search',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, i) {
+                        final doc = filtered[i];
+                        final data = doc.data();
+                        return EmployeeCard(
+                          key: ValueKey(doc.id),
+                          uid: doc.id,
+                          name: data['name'] as String? ?? 'Unknown',
+                          position: data['position'] as String? ?? '',
+                          hiredAt: data['createdAt'] as Timestamp?,
+                          isBoss: data['isEmployee'] == false,
+                          isPending: data['status'] == 'pending',
+                        );
+                      },
+                    ),
+            ),
+          ],
         );
       },
     );
   }
 }
- 
+
 class EmployeeCard extends StatefulWidget {
   final String uid;
   final String name;
   final Timestamp? hiredAt;
   final bool isBoss;
   final bool isPending;
- 
+  final String position;
+
   const EmployeeCard({
     super.key,
     required this.uid,
@@ -125,15 +324,16 @@ class EmployeeCard extends StatefulWidget {
     required this.hiredAt,
     required this.isBoss,
     required this.isPending,
+    required this.position,
   });
- 
+
   @override
   State<EmployeeCard> createState() => _EmployeeCardState();
 }
- 
+
 class _EmployeeCardState extends State<EmployeeCard> {
   bool _expanded = false;
- 
+
   Future<void> _edit() async {
     final messenger = ScaffoldMessenger.of(context);
     final newName = await showDialog<String>(
@@ -145,10 +345,12 @@ class _EmployeeCardState extends State<EmployeeCard> {
       await _services.updateEmployeeName(widget.uid, newName);
       messenger.showSnackBar(SnackBar(content: Text('Renamed to $newName')));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Failed to update name: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to update name: $e')),
+      );
     }
   }
- 
+
   /// Returns after the delete finishes (or fails). Used by both the button
   /// and the swipe gesture.
   Future<void> _delete() async {
@@ -182,11 +384,11 @@ class _EmployeeCardState extends State<EmployeeCard> {
       messenger.showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
     }
   }
- 
+
   @override
   Widget build(BuildContext context) {
     final initial = widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?';
- 
+
     final card = Card(
       margin: EdgeInsets.zero,
       elevation: 1,
@@ -209,26 +411,43 @@ class _EmployeeCardState extends State<EmployeeCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.name,
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w600)),
+                        Text(
+                          widget.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (widget.position.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.position,
+                            style: TextStyle(fontSize: 13, color: Colors.blueGrey[700]),
+                          ),
+                        ],
                         const SizedBox(height: 2),
                         Text(
                           widget.hiredAt == null
                               ? 'Joined: unknown'
                               : 'Joined ${formatTimeAgo(widget.hiredAt)}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
                         ),
                       ],
                     ),
                   ),
                   if (widget.isBoss)
                     const Chip(
-                        label: Text('Boss'), visualDensity: VisualDensity.compact),
+                      label: Text('Boss'),
+                      visualDensity: VisualDensity.compact,
+                    ),
                   if (widget.isPending)
                     const Chip(
-                        label: Text('Pending'),
-                        visualDensity: VisualDensity.compact),
+                      label: Text('Pending'),
+                      visualDensity: VisualDensity.compact,
+                    ),
                   Icon(_expanded ? Icons.expand_less : Icons.expand_more),
                 ],
               ),
@@ -252,7 +471,8 @@ class _EmployeeCardState extends State<EmployeeCard> {
                       if (!widget.isBoss)
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red),
+                            foregroundColor: Colors.red,
+                          ),
                           onPressed: _delete,
                           icon: const Icon(Icons.delete_outline, size: 18),
                           label: const Text('Delete'),
@@ -268,7 +488,7 @@ class _EmployeeCardState extends State<EmployeeCard> {
         ],
       ),
     );
- 
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: widget.isBoss
@@ -297,30 +517,30 @@ class _EmployeeCardState extends State<EmployeeCard> {
     );
   }
 }
- 
+
 class _EditNameDialog extends StatefulWidget {
   final String current;
   const _EditNameDialog({required this.current});
- 
+
   @override
   State<_EditNameDialog> createState() => _EditNameDialogState();
 }
- 
+
 class _EditNameDialogState extends State<_EditNameDialog> {
   late final _controller = TextEditingController(text: widget.current);
- 
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
- 
+
   void _save() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     Navigator.pop(context, text);
   }
- 
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -345,37 +565,37 @@ class _EditNameDialogState extends State<_EditNameDialog> {
     );
   }
 }
- 
+
 // ───────────────────────────── hours ─────────────────────────────
- 
+
 /// Loads lazily (only once the card is expanded). One query covers 7, 14 and
 /// 90 days; "All time" is a second query that runs only if tapped, because
 /// it can be large.
 class _HoursPanel extends StatefulWidget {
   final String uid;
   const _HoursPanel({required this.uid});
- 
+
   @override
   State<_HoursPanel> createState() => _HoursPanelState();
 }
- 
+
 class _HoursPanelState extends State<_HoursPanel> {
   late Future<List<Map<String, dynamic>>> _recent;
   Future<List<Map<String, dynamic>>>? _all;
- 
+
   @override
   void initState() {
     super.initState();
     _loadRecent();
   }
- 
+
   void _loadRecent() {
     _recent = _services.employeeClockRecords(
       widget.uid,
       since: DateTime.now().subtract(const Duration(days: 90)),
     );
   }
- 
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
@@ -385,10 +605,12 @@ class _HoursPanelState extends State<_HoursPanel> {
           return const Padding(
             padding: EdgeInsets.all(8),
             child: Center(
-                child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2))),
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
           );
         }
         if (snap.hasError) {
@@ -399,23 +621,27 @@ class _HoursPanelState extends State<_HoursPanel> {
             style: const TextStyle(color: Colors.red, fontSize: 12),
           );
         }
- 
+
         final now = DateTime.now();
         final t = _totals(snap.data!, now);
- 
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Text('Hours worked',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text(
+                  'Hours worked',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 if (t.onClock) ...[
                   const SizedBox(width: 8),
                   const Icon(Icons.circle, size: 10, color: Colors.green),
                   const SizedBox(width: 4),
-                  const Text('on the clock now',
-                      style: TextStyle(fontSize: 12, color: Colors.green)),
+                  const Text(
+                    'on the clock now',
+                    style: TextStyle(fontSize: 12, color: Colors.green),
+                  ),
                 ],
                 const Spacer(),
                 IconButton(
@@ -442,13 +668,16 @@ class _HoursPanelState extends State<_HoursPanel> {
       },
     );
   }
- 
+
   Widget _allTile(DateTime now) {
     if (_all == null) {
-      return _tile('All time', 'Tap to load',
-          onTap: () => setState(() {
-                _all = _services.employeeClockRecords(widget.uid);
-              }));
+      return _tile(
+        'All time',
+        'Tap to load',
+        onTap: () => setState(() {
+          _all = _services.employeeClockRecords(widget.uid);
+        }),
+      );
     }
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _all,
@@ -457,14 +686,17 @@ class _HoursPanelState extends State<_HoursPanel> {
           return _tile('All time', '…');
         }
         if (snap.hasError) {
-          return _tile('All time', 'Error',
-              onTap: () => setState(() => _all = null));
+          return _tile(
+            'All time',
+            'Error',
+            onTap: () => setState(() => _all = null),
+          );
         }
         return _tile('All time', _fmt(_totals(snap.data!, now).all));
       },
     );
   }
- 
+
   Widget _tile(String label, String value, {VoidCallback? onTap}) {
     return Expanded(
       child: Padding(
@@ -481,13 +713,19 @@ class _HoursPanelState extends State<_HoursPanel> {
             child: Column(
               children: [
                 FittedBox(
-                  child: Text(value,
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 2),
-                Text(label,
-                    style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                ),
               ],
             ),
           ),

@@ -40,6 +40,9 @@ dependencies:
 
   #images
   image_picker: ^1.2.1
+  url_launcher: ^6.3.3
+  firebase_storage: ^13.6.0
+  cached_network_image: ^4.0.4
 
 dev_dependencies:
   flutter_test:

@@ -54,12 +54,12 @@ class AdminCard extends StatelessWidget {
                     child: Icon(icon, color: color, size: 28),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
 
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -70,7 +70,7 @@ class AdminCard extends StatelessWidget {
                     subtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 10, color: Colors.grey[600]),
                   ),
                 ],
               ),

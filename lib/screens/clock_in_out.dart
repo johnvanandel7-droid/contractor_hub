@@ -1,5 +1,5 @@
 import 'dart:async';
- 
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/time_ago.dart';
@@ -10,21 +10,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
- 
+
 class ClockInOut extends StatefulWidget {
   const ClockInOut({super.key});
- 
+
   @override
   State<ClockInOut> createState() => _ClockInOutState();
 }
- 
+
 class _ClockInOutState extends State<ClockInOut> {
   final services = FirebaseServices.instance;
   final auth = FirebaseAuth.instance;
- 
+
   StreamSubscription<Position>? _positionSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _activeRecordSub;
- 
+
   String? _companyId;
   String? _companyName;
   String? _activeRecordId;
@@ -34,31 +34,31 @@ class _ClockInOutState extends State<ClockInOut> {
   Map<String, dynamic>? _currentJobSite;
   Position? _lastPosition;
   String _uid = '';
- 
+
   @override
   void initState() {
     super.initState();
     _bootstrap();
   }
- 
+
   @override
   void dispose() {
     _positionSub?.cancel();
     _activeRecordSub?.cancel();
     super.dispose();
   }
- 
+
   Future<void> _bootstrap() async {
     final uid = auth.currentUser?.uid;
     if (uid == null || !mounted) return; // or navigate to sign-in
     _uid = uid;
- 
+
     final user = await services.getUser(uid);
     if (user == null || !mounted) return;
- 
+
     _companyId = user['companyId'] as String?;
     _companyName = user['companyName'] as String?;
- 
+
     // Watch whether this employee already has an open shift (e.g. they
     // reopened the app while still clocked in).
     _activeRecordSub = services
@@ -79,7 +79,7 @@ class _ClockInOutState extends State<ClockInOut> {
             }
           },
         );
- 
+
     if (_companyId != null) {
       services
           .jobsForCompany(_companyId!)
@@ -102,10 +102,10 @@ class _ClockInOutState extends State<ClockInOut> {
             },
           );
     }
- 
+
     await _startLocationWatch();
   }
- 
+
   Future<void> _startLocationWatch() async {
     final hasPermission = await _ensureLocationPermission();
     if (!hasPermission) {
@@ -115,9 +115,9 @@ class _ClockInOutState extends State<ClockInOut> {
       );
       return;
     }
- 
+
     setState(() => _statusMessage = 'Watching your location...');
- 
+
     // NOTE: this only tracks location while this screen is open and the
     // app is in the foreground. To auto clock-out someone who leaves the
     // jobsite and closes the app, you need a background location plugin
@@ -129,10 +129,10 @@ class _ClockInOutState extends State<ClockInOut> {
       ),
     ).listen(_onPositionUpdate);
   }
- 
+
   Future<bool> _ensureLocationPermission() async {
     if (!await Geolocator.isLocationServiceEnabled()) return false;
- 
+
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -140,7 +140,7 @@ class _ClockInOutState extends State<ClockInOut> {
     return permission == LocationPermission.always ||
         permission == LocationPermission.whileInUse;
   }
- 
+
   void _onPositionUpdate(Position position) {
     if (_jobSites.isEmpty) {
       setState(() {
@@ -149,11 +149,11 @@ class _ClockInOutState extends State<ClockInOut> {
       });
       return;
     }
- 
+
     // Find the nearest jobsite and check if we're within its radius.
     Map<String, dynamic>? nearestSite;
     double nearestDistance = double.infinity;
- 
+
     for (final site in _jobSites) {
       final distance = Geolocator.distanceBetween(
         position.latitude,
@@ -166,10 +166,10 @@ class _ClockInOutState extends State<ClockInOut> {
         nearestSite = site;
       }
     }
- 
+
     final radius = (nearestSite?['radiusMeters'] as num?)?.toDouble() ?? 150;
     final isInside = nearestSite != null && nearestDistance <= radius;
- 
+
     setState(() {
       _lastPosition = position;
       _currentJobSite = nearestSite;
@@ -180,10 +180,10 @@ class _ClockInOutState extends State<ClockInOut> {
           ? 'No jobsite nearby'
           : '${nearestDistance.toStringAsFixed(0)}m from ${nearestSite['name']}';
     });
- 
+
     _handleGeofenceTransition(isInside);
   }
- 
+
   Future<void> _handleGeofenceTransition(bool isInside) async {
     // Entered the geofence and not currently clocked in -> auto clock in.
     if (isInside && _activeRecordId == null && _currentJobSite != null) {
@@ -196,7 +196,7 @@ class _ClockInOutState extends State<ClockInOut> {
       if (mounted) setState(() => _activeRecordId = ref.id);
       return;
     }
- 
+
     // Left the geofence and currently clocked in -> auto clock out.
     if (!isInside && _activeRecordId != null) {
       final recordId = _activeRecordId!;
@@ -204,19 +204,21 @@ class _ClockInOutState extends State<ClockInOut> {
       if (mounted) setState(() => _activeRecordId = null);
     }
   }
- 
+
   Future<void> _openAddTimeDialog() async {
     final hoursController = TextEditingController();
     final noteController = TextEditingController();
     DateTime selectedDate = DateTime.now();
- 
+
     await showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: const Text('Add time manually'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -272,7 +274,7 @@ class _ClockInOutState extends State<ClockInOut> {
                   onPressed: () async {
                     final hours = double.tryParse(hoursController.text.trim());
                     if (hours == null || hours <= 0) return;
- 
+
                     await services.addManualTime(
                       uid: _uid,
                       companyName: _companyName ?? '',
@@ -293,27 +295,38 @@ class _ClockInOutState extends State<ClockInOut> {
       },
     );
   }
- 
+
+  void expandMap() {
+    
+  }
+
   void _showJobSiteInfo(Map<String, dynamic> site) {
     final name = site['name'] as String? ?? 'Unnamed site';
     final lat = site['latitude'] as double?;
     final lng = site['longitude'] as double?;
     final pos = _lastPosition;
- 
+
     String message = name;
     if (pos != null && lat != null && lng != null) {
-      final distance = Geolocator.distanceBetween(pos.latitude, pos.longitude, lat, lng);
+      final distance = Geolocator.distanceBetween(
+        pos.latitude,
+        pos.longitude,
+        lat,
+        lng,
+      );
       message = '$name — ${distance.toStringAsFixed(0)}m away';
     }
- 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
- 
+
   Widget _buildJobsMap() {
-    final sitesWithLocation = _jobSites.where(
-      (site) => site['latitude'] != null && site['longitude'] != null,
-    ).toList();
- 
+    final sitesWithLocation = _jobSites
+        .where((site) => site['latitude'] != null && site['longitude'] != null)
+        .toList();
+
     final points = <LatLng>[
       for (final site in sitesWithLocation)
         LatLng(site['latitude'] as double, site['longitude'] as double),
@@ -322,7 +335,7 @@ class _ClockInOutState extends State<ClockInOut> {
     if (currentPos != null) {
       points.add(LatLng(currentPos.latitude, currentPos.longitude));
     }
- 
+
     if (points.isEmpty) {
       return Container(
         decoration: BoxDecoration(
@@ -337,11 +350,14 @@ class _ClockInOutState extends State<ClockInOut> {
         ),
       );
     }
- 
+
     final markers = <Marker>[
       for (final site in sitesWithLocation)
         Marker(
-          point: LatLng(site['latitude'] as double, site['longitude'] as double),
+          point: LatLng(
+            site['latitude'] as double,
+            site['longitude'] as double,
+          ),
           width: 36,
           height: 36,
           child: GestureDetector(
@@ -349,14 +365,16 @@ class _ClockInOutState extends State<ClockInOut> {
             child: Icon(
               Icons.location_on,
               size: 34,
-              color: _currentJobSite != null && _currentJobSite!['id'] == site['id']
+              color:
+                  _currentJobSite != null &&
+                      _currentJobSite!['id'] == site['id']
                   ? (_isInsideGeofence ? Colors.green : Colors.orange)
                   : Colors.blue,
             ),
           ),
         ),
     ];
- 
+
     if (currentPos != null) {
       markers.add(
         Marker(
@@ -368,13 +386,15 @@ class _ClockInOutState extends State<ClockInOut> {
               shape: BoxShape.circle,
               color: Colors.blue,
               border: Border.all(color: Colors.white, width: 3),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4)],
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4),
+              ],
             ),
           ),
         ),
       );
     }
- 
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: FlutterMap(
@@ -389,6 +409,22 @@ class _ClockInOutState extends State<ClockInOut> {
               : null,
         ),
         children: [
+          Positioned(
+                      top: 2,
+                      right: 2,
+                      child: GestureDetector(
+                        onTap: () => expandMap,
+                        child: const CircleAvatar(
+                          radius: 11,
+                          backgroundColor: Colors.black54,
+                          child: Icon(
+                            Icons.close,
+                            size: 13,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.contractorhub.app',
@@ -397,7 +433,10 @@ class _ClockInOutState extends State<ClockInOut> {
             circles: [
               for (final site in sitesWithLocation)
                 CircleMarker(
-                  point: LatLng(site['latitude'] as double, site['longitude'] as double),
+                  point: LatLng(
+                    site['latitude'] as double,
+                    site['longitude'] as double,
+                  ),
                   radius: (site['radiusMeters'] as num?)?.toDouble() ?? 150,
                   useRadiusInMeter: true,
                   color: Colors.blue.withOpacity(0.15),
@@ -411,11 +450,11 @@ class _ClockInOutState extends State<ClockInOut> {
       ),
     );
   }
- 
+
   @override
   Widget build(BuildContext context) {
     final isClockedIn = _activeRecordId != null;
- 
+
     return Scaffold(
       appBar: AppBarWidget(),
       backgroundColor: Colors.grey[100],
@@ -434,7 +473,11 @@ class _ClockInOutState extends State<ClockInOut> {
                   ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
                 ),
                 child: Column(
@@ -447,7 +490,10 @@ class _ClockInOutState extends State<ClockInOut> {
                     const SizedBox(height: 10),
                     Text(
                       isClockedIn ? 'Clocked In' : 'Clocked Out',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -473,77 +519,141 @@ class _ClockInOutState extends State<ClockInOut> {
                 label: const Text('Add time manually'),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(44),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('Recent shifts', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+              const Text(
+                'Recent shifts',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
               const SizedBox(height: 8),
-              Expanded(
+
+              // Fixed height so shifts always have room, even on small screens.
+              SizedBox(
+                height: 110,
                 child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: services.clockHistory(_uid),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
                       return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            'Error loading shifts: ${snapshot.error}',
-                            style: const TextStyle(color: Colors.red),
-                            textAlign: TextAlign.center,
-                          ),
+                        child: Text(
+                          'Error: ${snapshot.error}',
+                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          textAlign: TextAlign.center,
                         ),
                       );
                     }
                     if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
                     }
                     final docs = snapshot.data!.docs;
                     if (docs.isEmpty) {
                       return Center(
-                        child: Text('No shifts yet', style: TextStyle(color: Colors.grey[600])),
+                        child: Text(
+                          'No shifts yet',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
                       );
                     }
                     return ListView.separated(
+                      scrollDirection: Axis.horizontal,
                       itemCount: docs.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
                       itemBuilder: (context, index) {
                         final data = docs[index].data();
                         final clockIn = data['clockInTime'] as Timestamp?;
                         final clockOut = data['clockOutTime'] as Timestamp?;
                         final method = data['method'] as String? ?? 'auto';
-                        final siteName = data['jobSiteName'] as String? ?? 'Unknown site';
- 
+                        final siteName =
+                            data['jobSiteName'] as String? ?? 'Unknown site';
+                        final hours = (data['hours'] as num?)?.toDouble();
+
+                        String subtitle;
+                        if (clockIn == null) {
+                          subtitle = 'No start time';
+                        } else if (clockOut == null) {
+                          subtitle =
+                              'Started ${formatTimeAgo(clockIn)} — still in';
+                        } else {
+                          subtitle =
+                              '${formatTimeAgo(clockIn)} → ${formatTimeAgo(clockOut)}';
+                        }
+
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          width: 220, // fixed width = works in horizontal list
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(10),
                             boxShadow: [
-                              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1)),
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
                             ],
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                method == 'manual' ? Icons.edit_note : Icons.location_on,
-                                color: Colors.blueGrey,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(siteName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                    Text(
-                                      clockIn == null
-                                          ? 'No start time'
-                                          : clockOut == null
-                                              ? 'Started ${formatTimeAgo(clockIn)} — still clocked in'
-                                              : 'Started ${formatTimeAgo(clockIn)}, ended ${formatTimeAgo(clockOut)}',
-                                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              Row(
+                                children: [
+                                  Icon(
+                                    method == 'manual'
+                                        ? Icons.edit_note
+                                        : Icons.location_on,
+                                    size: 18,
+                                    color: Colors.blueGrey,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      siteName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
                                     ),
-                                  ],
+                                  ),
+                                  if (hours != null)
+                                    Text(
+                                      '${hours.toStringAsFixed(1)}h',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                subtitle,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                method == 'manual' ? 'Manual' : 'Auto GPS',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[500],
                                 ),
                               ),
                             ],
@@ -554,10 +664,16 @@ class _ClockInOutState extends State<ClockInOut> {
                   },
                 ),
               ),
+
               const SizedBox(height: 14),
-              const Text('Job sites', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+              const Text(
+                'Job sites',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
               const SizedBox(height: 8),
-              SizedBox(height: 220, child: _buildJobsMap()),
+
+              // Map takes whatever space is left (shrinks on small screens).
+              Expanded(child: _buildJobsMap()),
             ],
           ),
         ),
