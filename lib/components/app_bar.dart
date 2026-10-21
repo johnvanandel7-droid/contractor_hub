@@ -1,10 +1,11 @@
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/components/reusable_icon_button.dart';
 import 'package:contractor_hub/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:provider/provider.dart';
-
+ 
 // ───────────────────────────────────────────────────────────────────────────
 // ROUTE NAMES: change these to match the routes map in main.dart.
 // ───────────────────────────────────────────────────────────────────────────
@@ -12,7 +13,7 @@ const _kHomeRoute = '/homePage';
 const _kWelcomeRoute = '/welcomeScreen';
 const _kJoinRequestsRoute = '/joinRequests';
 const _kClockRoute = '/clockInOut';
-
+ 
 /// Screens the search icon can jump to: (label, route, keywords).
 const _kSearchTargets = <(String, String, String)>[
   ('Home', '/homePage', 'main dashboard'),
@@ -28,35 +29,34 @@ const _kSearchTargets = <(String, String, String)>[
   ('Administrator panel', '/administratorPanel', 'admin boss employees jobs'),
   ('Join requests', _kJoinRequestsRoute, 'pending approve employees'),
 ];
-
+ 
 class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
   /// Page name, e.g. AppBarWidget(title: 'To Do List').
   final String? title;
-
+ 
   const AppBarWidget({super.key, this.title});
-
+ 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight + 34);
-
+ 
   void _snack(ScaffoldMessengerState m, String text) =>
       m.showSnackBar(SnackBar(content: Text(text)));
-
+ 
   Future<void> _confirmAndSignOut(BuildContext context) async {
+    // Everything that needs `context` is read BEFORE any await.
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
-
-    final AuthProvider auth;
+ 
+    // Use the app's AuthProvider if one is registered above MaterialApp, so
+    // any cleanup it does still runs. But logging out must never depend on
+    // it: if it isn't there, we just sign out of Firebase directly.
+    AuthProvider? provider;
     try {
-      auth = context.read<AuthProvider>();
+      provider = Provider.of<AuthProvider>(context, listen: false);
     } catch (e) {
-      debugPrint('Logout: AuthProvider lookup failed: $e');
-      _snack(
-        messenger,
-        'Logout failed: AuthProvider is not provided above this screen. ($e)',
-      );
-      return;
+      debugPrint('Logout: no AuthProvider above this screen (ok): $e');
     }
-
+ 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -75,15 +75,23 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
       ),
     );
     if (confirmed != true) return;
-
+ 
     try {
-      await auth.signOut();
+      if (provider != null) {
+        try {
+          await provider.signOut();
+        } catch (e) {
+          debugPrint('Logout: AuthProvider.signOut failed, falling back: $e');
+        }
+      }
+      // Safe to call twice; guarantees the session really ends.
+      await FirebaseAuth.instance.signOut();
     } catch (e) {
       debugPrint('Logout: signOut threw: $e');
       _snack(messenger, 'Could not sign out: $e');
       return;
     }
-
+ 
     try {
       navigator.pushNamedAndRemoveUntil(_kWelcomeRoute, (r) => false);
     } catch (e) {
@@ -94,7 +102,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
       );
     }
   }
-
+ 
   void _openProfileSheet(
     BuildContext context,
     Map<String, dynamic>? user,
@@ -103,7 +111,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
     final name = (user?['name'] as String?) ?? 'Unknown';
     final company = (user?['companyName'] as String?) ?? '';
     final email = FirebaseAuth.instance.currentUser?.email ?? '';
-
+ 
     // Bottom sheet (not PopupMenuButton) on purpose: a popup menu that opens
     // a dialog caused the `dependents.isEmpty` assertion earlier.
     showModalBottomSheet(
@@ -162,7 +170,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
       ),
     );
   }
-
+ 
   void _openNotificationsSheet(BuildContext context, String uid) {
     showModalBottomSheet(
       context: context,
@@ -251,18 +259,18 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
       ),
     );
   }
-
+ 
   Widget _badge({required int count, required Widget child}) {
     if (count <= 0) return child;
     return Badge(label: Text(count > 99 ? '99+' : '$count'), child: child);
   }
-
+ 
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.canPop(context);
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final db = FirebaseFirestore.instance;
-
+ 
     // One stream of the user's doc. includeMetadataChanges lets us detect
     // "offline" with no extra package: isFromCache stays true with no server.
     final userStream = uid == null
@@ -271,7 +279,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
               .collection('users')
               .doc(uid)
               .snapshots(includeMetadataChanges: true);
-
+ 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: userStream,
       builder: (context, userSnap) {
@@ -281,7 +289,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
         final companyId = user?['companyId'] as String?;
         final offline = userSnap.data?.metadata.isFromCache ?? false;
         final name = (user?['name'] as String?) ?? '';
-
+ 
         return AppBar(
           elevation: 2,
           backgroundColor: Colors.blueGrey[800],
@@ -449,13 +457,13 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
-
+ 
 /// Search that jumps to a screen by name or keyword.
 class _ScreenSearchDelegate extends SearchDelegate<void> {
   final bool isBoss;
   _ScreenSearchDelegate({required this.isBoss})
     : super(searchFieldLabel: 'Search screens');
-
+ 
   List<(String, String, String)> _matches() {
     final q = query.trim().toLowerCase();
     return _kSearchTargets.where((t) {
@@ -467,25 +475,25 @@ class _ScreenSearchDelegate extends SearchDelegate<void> {
           t.$3.toLowerCase().contains(q);
     }).toList();
   }
-
+ 
   @override
   List<Widget>? buildActions(BuildContext context) => [
     if (query.isNotEmpty)
       IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ''),
   ];
-
+ 
   @override
   Widget? buildLeading(BuildContext context) => IconButton(
     icon: const Icon(Icons.arrow_back),
     onPressed: () => close(context, null),
   );
-
+ 
   @override
   Widget buildResults(BuildContext context) => _list(context);
-
+ 
   @override
   Widget buildSuggestions(BuildContext context) => _list(context);
-
+ 
   Widget _list(BuildContext context) {
     final items = _matches();
     if (items.isEmpty) return const Center(child: Text('No matching screens'));
@@ -505,3 +513,4 @@ class _ScreenSearchDelegate extends SearchDelegate<void> {
     );
   }
 }
+ 

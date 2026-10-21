@@ -1,3 +1,4 @@
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/time_ago.dart';
@@ -5,20 +6,20 @@ import 'package:contractor_hub/constants.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
+ 
 final auth = FirebaseAuth.instance;
 final firebase = FirebaseFirestore.instance;
 final services = FirebaseServices.instance;
-
+ 
 // Simple in-memory cache so the same creator's name isn't re-fetched from
 // Firestore for every tile on every stream rebuild (the ToDoItems stream
 // re-emits for the whole collection whenever any single doc changes).
 final Map<String, Future<Map<String, dynamic>?>> _userCache = {};
-
+ 
 Future<Map<String, dynamic>?> _cachedGetUser(String uid) {
   return _userCache.putIfAbsent(uid, () => services.getUser(uid));
 }
-
+ 
 /// Formats a *future-facing* date (like a task's completion date) as
 /// "Due in 3 days" / "Due today" / "Overdue by 2 days". Deliberately
 /// separate from `formatTimeAgo`, which is written for past timestamps
@@ -29,40 +30,40 @@ String _formatDueDate(Timestamp dueTimestamp) {
   final dueDay = DateTime(due.year, due.month, due.day);
   final today = DateTime(now.year, now.month, now.day);
   final dayDiff = dueDay.difference(today).inDays;
-
+ 
   if (dayDiff == 0) return 'Due today';
   if (dayDiff == 1) return 'Due tomorrow';
   if (dayDiff > 1) return 'Due in $dayDiff days';
   if (dayDiff == -1) return 'Overdue by 1 day';
   return 'Overdue by ${-dayDiff} days';
 }
-
+ 
 class ToDoList extends StatefulWidget {
   const ToDoList({super.key});
-
+ 
   @override
   State<ToDoList> createState() => _ToDoListState();
 }
-
+ 
 class _ToDoListState extends State<ToDoList> {
   TextEditingController newTaskController = TextEditingController();
   DateTime? _completionDate;
   String? _companyName;
-
+ 
   String get _currentUserUid => auth.currentUser!.uid;
-
+ 
   @override
   void initState() {
     super.initState();
     _loadCompany();
   }
-
+ 
   @override
   void dispose() {
     newTaskController.dispose();
     super.dispose();
   }
-
+ 
   Future<void> _loadCompany() async {
     final user = await services.getUser(_currentUserUid);
     if (mounted) {
@@ -71,7 +72,7 @@ class _ToDoListState extends State<ToDoList> {
       });
     }
   }
-
+ 
   Future<void> _pickDate(
     BuildContext context,
     StateSetter setSheetState,
@@ -86,7 +87,7 @@ class _ToDoListState extends State<ToDoList> {
       setSheetState(() => _completionDate = pickedDate);
     }
   }
-
+ 
   Future<void> _openNewTask() async {
     await showModalBottomSheet(
       context: context,
@@ -180,7 +181,7 @@ class _ToDoListState extends State<ToDoList> {
                               }
                               final message = newTaskController.text.trim();
                               final completionDate = _completionDate;
-
+ 
                               try {
                                 await firebase.collection('ToDoItems').add({
                                   'message': message,
@@ -225,7 +226,7 @@ class _ToDoListState extends State<ToDoList> {
       },
     );
   }
-
+ 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -259,12 +260,12 @@ class _ToDoListState extends State<ToDoList> {
     );
   }
 }
-
+ 
 class ToDoListItems extends StatelessWidget {
   final String companyName;
-
+ 
   const ToDoListItems({super.key, required this.companyName});
-
+ 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -295,11 +296,11 @@ class ToDoListItems extends StatelessWidget {
             ),
           );
         }
-
+ 
         final docs = snapshot.data!.docs;
         final openTiles = <ToDoTile>[];
         final doneTiles = <ToDoTile>[];
-
+ 
         for (final doc in docs) {
           try {
             final data = doc.data() as Map<String, dynamic>;
@@ -310,7 +311,7 @@ class ToDoListItems extends StatelessWidget {
             final createdAt = data['createdAt'] as Timestamp?;
             final createdByUid = data['createdBy'] as String;
             final isCompleted = data['isCompleted'] as bool? ?? false;
-
+ 
             final tile = ToDoTile(
               completionDate: completionDate,
               toDoMessage: toDoMessage,
@@ -319,16 +320,16 @@ class ToDoListItems extends StatelessWidget {
               toDoId: doc.id,
               isCompleted: isCompleted,
             );
-
+ 
             (isCompleted ? doneTiles : openTiles).add(tile);
           } catch (e) {
             continue;
           }
         }
-
+ 
         // Open tasks first, completed tasks pushed to the bottom.
         final tiles = [...openTiles, ...doneTiles];
-
+ 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -364,7 +365,7 @@ class ToDoListItems extends StatelessWidget {
     );
   }
 }
-
+ 
 class ToDoTile extends StatelessWidget {
   final String toDoMessage;
   final Timestamp? completionDate;
@@ -372,7 +373,7 @@ class ToDoTile extends StatelessWidget {
   final String createdByUid;
   final String toDoId;
   final bool isCompleted;
-
+ 
   const ToDoTile({
     super.key,
     required this.completionDate,
@@ -382,7 +383,7 @@ class ToDoTile extends StatelessWidget {
     required this.toDoId,
     required this.isCompleted,
   });
-
+ 
   Future<void> _toggleCompleted(BuildContext context) async {
     try {
       await firebase.collection('ToDoItems').doc(toDoId).update({
@@ -396,107 +397,36 @@ class ToDoTile extends StatelessWidget {
       }
     }
   }
-
+ 
   Future<void> _editToDoItem(BuildContext context) async {
-    final messageController = TextEditingController(text: toDoMessage);
-    DateTime? editedDate = completionDate?.toDate();
-
+    final messenger = ScaffoldMessenger.of(context);
+ 
+    // The dialog owns (and disposes) its own controller. Disposing a
+    // controller right after `await showDialog` is what caused the red
+    // "TextEditingController used after being disposed" screen: the dialog
+    // is still playing its closing animation when showDialog returns.
+    final result = await showDialog<_EditTaskResult>(
+      context: context,
+      builder: (_) => _EditTaskDialog(
+        initialMessage: toDoMessage,
+        initialDate: completionDate?.toDate(),
+      ),
+    );
+    if (result == null) return;
+ 
     try {
-      await showDialog(
-        context: context,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (dialogContext, setDialogState) {
-              return AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: const Text('Edit task'),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        controller: messageController,
-                        autofocus: true,
-                        decoration: kInputDecoration.copyWith(hintText: 'Task'),
-                      ),
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: dialogContext,
-                            initialDate: editedDate ?? DateTime.now(),
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime(2100),
-                          );
-                          if (picked != null) {
-                            setDialogState(() => editedDate = picked);
-                          }
-                        },
-                        icon: const Icon(Icons.calendar_today, size: 18),
-                        label: Text(
-                          editedDate == null
-                              ? 'Set completion date'
-                              : '${editedDate!.month}/${editedDate!.day}/${editedDate!.year}',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          alignment: Alignment.centerLeft,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () async {
-                      final newMessage = messageController.text.trim();
-                      if (newMessage.isEmpty) return;
-
-                      try {
-                        await firebase
-                            .collection('ToDoItems')
-                            .doc(toDoId)
-                            .update({
-                              'message': newMessage,
-                              'completionDate': editedDate == null
-                                  ? null
-                                  : Timestamp.fromDate(editedDate!),
-                            });
-                        if (dialogContext.mounted) Navigator.pop(dialogContext);
-                      } catch (e) {
-                        if (dialogContext.mounted) {
-                          ScaffoldMessenger.of(dialogContext).showSnackBar(
-                            SnackBar(
-                              content: Text('Could not save changes: $e'),
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    child: const Text('Save'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
+      await firebase.collection('ToDoItems').doc(toDoId).update({
+        'message': result.message,
+        'completionDate':
+            result.date == null ? null : Timestamp.fromDate(result.date!),
+      });
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save changes: $e')),
       );
-    } finally {
-      messageController.dispose();
     }
   }
-
+ 
   Future<void> _deleteToDo(BuildContext context) async {
     await showDialog(
       context: context,
@@ -539,7 +469,7 @@ class ToDoTile extends StatelessWidget {
       },
     );
   }
-
+ 
   @override
   Widget build(BuildContext context) {
     final due = completionDate;
@@ -557,7 +487,7 @@ class ToDoTile extends StatelessWidget {
             DateTime.now().day,
           ),
         );
-
+ 
     return Container(
       decoration: BoxDecoration(
         color: isCompleted ? Colors.grey[50] : Colors.white,
@@ -634,7 +564,7 @@ class ToDoTile extends StatelessWidget {
                             ? '…'
                             : (snapshot.data?['name'] as String? ??
                                   'Unknown user');
-
+ 
                         return Text(
                           createdAt == null
                               ? 'Created by $creatorName'
@@ -650,46 +580,118 @@ class ToDoTile extends StatelessWidget {
                 ),
               ),
             ),
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert, color: Colors.grey[600]),
-              onSelected: (value) {
-                // Defer to the next event-loop turn: opening a new route
-                // (showDialog) synchronously inside PopupMenuButton's
-                // onSelected, while the popup menu's own route is still
-                // closing, corrupts Flutter's InheritedElement dependents
-                // tracking and surfaces later as a
-                // "dependents.isEmpty" framework assertion.
-                Future.delayed(Duration.zero, () {
-                  if (value == 'edit') _editToDoItem(context);
-                  if (value == 'delete') _deleteToDo(context);
-                });
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit, size: 18),
-                      SizedBox(width: 8),
-                      Text('Edit'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, size: 18, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('Delete', style: TextStyle(color: Colors.red)),
-                    ],
-                  ),
-                ),
-              ],
+            // Plain IconButtons instead of a PopupMenuButton: opening a dialog
+            // from a popup menu triggered the "dependents.isEmpty" assertion.
+            IconButton(
+              tooltip: 'Edit',
+              icon: Icon(Icons.edit, size: 20, color: Colors.grey[700]),
+              onPressed: () => _editToDoItem(context),
+            ),
+            IconButton(
+              tooltip: 'Delete',
+              icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+              onPressed: () => _deleteToDo(context),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+ 
+class _EditTaskResult {
+  final String message;
+  final DateTime? date;
+  const _EditTaskResult(this.message, this.date);
+}
+ 
+class _EditTaskDialog extends StatefulWidget {
+  final String initialMessage;
+  final DateTime? initialDate;
+  const _EditTaskDialog({required this.initialMessage, required this.initialDate});
+ 
+  @override
+  State<_EditTaskDialog> createState() => _EditTaskDialogState();
+}
+ 
+class _EditTaskDialogState extends State<_EditTaskDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialMessage);
+  late DateTime? _date = widget.initialDate;
+ 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+ 
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+ 
+  void _save() {
+    final message = _controller.text.trim();
+    if (message.isEmpty) return;
+    Navigator.pop(context, _EditTaskResult(message, _date));
+  }
+ 
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Edit task'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              decoration: kInputDecoration.copyWith(hintText: 'Task'),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _pickDate,
+              icon: const Icon(Icons.calendar_today, size: 18),
+              label: Text(
+                _date == null
+                    ? 'Set completion date'
+                    : '${_date!.month}/${_date!.day}/${_date!.year}',
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                alignment: Alignment.centerLeft,
+              ),
+            ),
+            if (_date != null)
+              TextButton(
+                onPressed: () => setState(() => _date = null),
+                child: const Text('Remove date'),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: _save,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

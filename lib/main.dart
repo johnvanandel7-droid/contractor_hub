@@ -1,4 +1,5 @@
 import 'package:contractor_hub/screens/administrator_panel.dart';
+import 'package:contractor_hub/screens/auth_gate.dart';
 import 'package:contractor_hub/screens/company_files.dart';
 import 'package:contractor_hub/screens/construction_images.dart';
 import 'package:contractor_hub/screens/contacts.dart';
@@ -38,7 +39,7 @@ void main() async {
           onSurface: Colors.black,
         ),
       ),
-      initialRoute: '/welcomeScreen',
+      home: const AuthGate(),
       routes: {
         '/welcomeScreen': (context) => WelcomeScreen(),
         '/loginPage': (context) => LoginScreen(),
@@ -57,6 +58,7 @@ void main() async {
         '/constructionImages': (context) => ConstructionImages(),
         '/quickbooksConnection':(context) => QuickbooksConnection(),
         '/workStats':(context) => WorkStats(),
+        '/authGate': (context) => AuthGate(),
       },
     ),
   );

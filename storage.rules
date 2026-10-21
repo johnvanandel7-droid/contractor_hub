@@ -1,0 +1,27 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Which company the signed-in user belongs to (read from Firestore).
+    function userCompany() {
+      return firestore.get(
+        /databases/(default)/documents/users/$(request.auth.uid)
+      ).data.companyId;
+    }
+
+    // Job photos: everyone in the company can read, any member can add,
+    // and nobody (including the uploader and bosses) can overwrite or
+    // delete them from the app.
+    match /companies/{companyId}/jobImages/{jobId}/{fileName} {
+      allow read: if request.auth != null && userCompany() == companyId;
+
+      allow create: if request.auth != null
+          && userCompany() == companyId
+          && request.resource.size < 15 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*');
+
+      allow update, delete: if false;
+    }
+  }
+}

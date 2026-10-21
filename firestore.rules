@@ -1,0 +1,234 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==================== HELPER FUNCTIONS ====================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function callerData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isCompanyAdminOf(targetUserData) {
+      let caller = callerData();
+      return caller.isEmployee == false
+          && caller.companyId == targetUserData.companyId;
+    }
+
+    function isBossOf(companyId) {
+      let caller = callerData();
+      return caller.isEmployee == false && caller.companyId == companyId;
+    }
+
+    // Same-company check for docs that carry a companyId field, used by
+    // POlogs, TravelLogs, and jobs below.
+    function isInCompany(companyId) {
+      return isSignedIn() && callerData().companyId == companyId;
+    }
+
+    // ==================== Users collection =====================
+    match /users/{userId} {
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      
+      allow read, update: if isSignedIn() && (
+        request.auth.uid == userId
+        || isCompanyAdminOf(resource.data)
+      );
+
+      // Deleting an employee goes through the deleteEmployeeAccount Cloud
+      // Function (it also removes their login, and bypasses rules via the
+      // Admin SDK), so clients can't delete user docs directly. This also
+      // stops a boss from deleting their own account by accident.
+      allow delete: if false;
+    }
+
+    // ===================== Notifications (app bar bell) ====================
+    // Each user reads and marks-as-read their own notifications. Nothing in
+    // the app creates or deletes them (Cloud Functions / Admin SDK do).
+    match /users/{userId}/notifications/{notificationId} {
+      allow read, update: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ===================== Companies collection ====================
+    match /companies/{companyId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+
+      // The company's boss can edit anything. Anyone else signed in may only
+      // touch the two fields a joining employee changes at registration.
+      allow update: if isSignedIn() && (
+        resource.data.get('bossId', '') == request.auth.uid
+        || request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['numberOfEmployees', 'employeeIds'])
+      );
+    }
+
+    // ===================== Jobs collection ====================
+    // Required by jobsForCompany() in firebase_services.dart, which backs
+    // the job dropdown on both the expense tracker and mileage tracker.
+    // Without this block those dropdowns fail with permission-denied.
+    match /jobs/{jobId} {
+      allow read: if isInCompany(resource.data.companyId);
+      allow create: if isInCompany(request.resource.data.companyId);
+      allow update: if isInCompany(resource.data.companyId)
+          && request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isBossOf(resource.data.companyId);
+    }
+
+    // ===================== Job sites collection (legacy) ====================
+    // Superseded by /jobs above. Left in place in case any old data or
+    // in-flight code still reads from it; safe to delete once migrated.
+    match /jobsites/{siteId} {
+      allow read: if isSignedIn();
+      allow create: if isInCompany(request.resource.data.companyId);
+      allow update: if isInCompany(resource.data.companyId)
+          && request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isBossOf(resource.data.companyId);
+    }
+
+    // ===================== Clock records collection ====================
+    match /clockRecords/{recordId} {
+      // Employees read their own records. A boss can also read records of
+      // anyone in their company (for the employee hours totals).
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.uid
+        || (callerData().isEmployee == false
+            && get(/databases/$(database)/documents/users/$(resource.data.uid)).data.companyId
+               == callerData().companyId)
+      );
+
+      // A user can only create clock records for themselves.
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.uid;
+
+      // A user can only update their own clock records (e.g. clock-out).
+      // If managers also need to edit employees' records, add an OR clause
+      // checking a role or company match once you have that data modeled.
+      allow update: if isSignedIn() && request.auth.uid == resource.data.uid;
+    }
+
+    // ===================== Job images collection ====================
+    match /jobImages/{imageId} {
+      // Everyone in the company sees the same photos.
+      allow read: if isInCompany(resource.data.companyId);
+      allow create: if isSignedIn()
+          && request.auth.uid == request.resource.data.uploadedBy
+          && isInCompany(request.resource.data.companyId);
+      // Photos are permanent: no edits, no deletes from the app.
+      allow update, delete: if false;
+    }
+
+    // ===================== Image folders (photos only, not jobs) ====================
+    // Extra folders on the Construction Images screen. Separate from
+    // jobs/jobsites so clock in/out and the trackers never see them.
+    match /imageFolders/{folderId} {
+      allow read: if isInCompany(resource.data.companyId);
+      allow create: if isSignedIn()
+          && request.resource.data.createdBy == request.auth.uid
+          && isInCompany(request.resource.data.companyId);
+      allow update, delete: if isBossOf(resource.data.companyId);
+    }
+
+   // ===================== Contacts ====================
+    match /contacts/{contactId} {
+      // Single-doc read: same company only.
+      allow get: if isSignedIn()
+          && resource.data.companyId == callerData().companyId;
+
+      // List/query: only allowed when the query filters by the caller's company.
+      // Without this, .where('companyId' == ...) often returns permission-denied.
+      allow list: if isSignedIn()
+          && request.query.limit <= 500
+          && resource.data.companyId == callerData().companyId;
+
+      allow create: if isSignedIn()
+          && request.resource.data.companyId == callerData().companyId
+          && request.resource.data.addedBy == request.auth.uid
+          && request.resource.data.keys().hasAll(['companyId', 'name', 'addedBy', 'source'])
+          && (
+            request.resource.data.source == 'manual'
+            || (request.resource.data.source == 'synced'
+                && isBossOf(request.resource.data.companyId))
+          );
+
+      allow update: if isSignedIn()
+          && resource.data.companyId == callerData().companyId
+          && request.resource.data.companyId == resource.data.companyId;
+
+      allow delete: if isSignedIn()
+          && resource.data.companyId == callerData().companyId
+          && (resource.data.addedBy == request.auth.uid
+              || isBossOf(resource.data.companyId));
+    }
+
+    match /contactGroups/{groupId} {
+      allow get: if isSignedIn()
+          && resource.data.companyId == callerData().companyId;
+
+      allow list: if isSignedIn()
+          && resource.data.companyId == callerData().companyId;
+
+      allow create: if isSignedIn()
+          && request.resource.data.companyId == callerData().companyId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.keys().hasAll(['companyId', 'name', 'createdBy']);
+
+      allow update, delete: if isSignedIn()
+          && resource.data.companyId == callerData().companyId
+          && (resource.data.createdBy == request.auth.uid
+              || isBossOf(resource.data.companyId));
+    }
+
+    // ===================== To-do items collection ====================
+    match /ToDoItems/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.createdBy;
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.createdBy;
+    }
+
+    // ===================== PO logs collection (expense tracker) ====================
+    // NOTE: the app writes to 'POlogs' (lowercase "logs"), not 'POLogs' —
+    // the collection name here must match exactly or every request falls
+    // through to the default deny at the bottom of this file.
+    match /POlogs/{logId} {
+      allow read: if isInCompany(resource.data.companyId);
+
+      allow create: if isSignedIn()
+          && request.resource.data.createdBy == request.auth.uid
+          && isInCompany(request.resource.data.companyId);
+
+      // Only the person who logged it can edit or delete it, and editing
+      // can't reassign the log to someone else or to another company.
+      allow update: if isSignedIn()
+          && request.auth.uid == resource.data.createdBy
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.companyId == resource.data.companyId;
+
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.createdBy;
+    }
+
+    // ===================== Travel logs collection (mileage tracker) ====================
+    match /TravelLogs/{logId} {
+      allow read: if isInCompany(resource.data.companyId);
+
+      allow create: if isSignedIn()
+          && request.resource.data.createdBy == request.auth.uid
+          && isInCompany(request.resource.data.companyId);
+
+      allow update: if isSignedIn()
+          && request.auth.uid == resource.data.createdBy
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.companyId == resource.data.companyId;
+
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.createdBy;
+    }
+
+    // ===================== QuickBooks (server only) ====================
+    // qbConnections holds OAuth tokens; qbStates holds one-time login
+    // nonces. Only Cloud Functions (Admin SDK) touch them. No client access.
+    match /qbConnections/{id} { allow read, write: if false; }
+    match /qbStates/{id} { allow read, write: if false; }
+  }
+}

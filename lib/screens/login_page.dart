@@ -1,185 +1,183 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 import 'package:contractor_hub/constants.dart';
-
+import 'package:contractor_hub/screens/auth_gate.dart' show kStayLoggedInKey;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+ 
 class LoginScreen extends StatefulWidget {
   static const id = 'login_screen';
-
+ 
   const LoginScreen({super.key});
+ 
   @override
-  // ignore: library_private_types_in_public_api
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
-
+ 
 class _LoginScreenState extends State<LoginScreen> {
-  late final FirebaseAuth _auth;
-  bool showSpinner = false;
-  String? email;
-  String? password;
-  String deniedEntryReason2 = '';
-
+  final _auth = FirebaseAuth.instance;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+ 
+  bool _showSpinner = false;
+  bool _hidePassword = true;
+  bool _stayLoggedIn = true;
+  String _errorMessage = '';
+ 
   @override
-  void initState() {
-    super.initState();
-
-    _auth = FirebaseAuth.instance;
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
-
-  void turnSpinnerOnOff(bool changeSpinner) {
+ 
+  String _messageFor(FirebaseAuthException e) {
+    switch (e.code) {
+      // Newer Firebase projects report a wrong email OR password as
+      // 'invalid-credential' (to avoid revealing which accounts exist).
+      case 'invalid-credential':
+      case 'wrong-password':
+      case 'user-not-found':
+        return 'Incorrect email or password';
+      case 'invalid-email':
+        return 'Invalid email format';
+      case 'user-disabled':
+        return 'Account disabled';
+      case 'too-many-requests':
+        return 'Too many attempts — try again later';
+      case 'network-request-failed':
+        return 'No connection. Check your internet and try again';
+      default:
+        return e.message ?? 'Login failed (${e.code})';
+    }
+  }
+ 
+  Future<void> _logIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Please enter email and password');
+      return;
+    }
+ 
     setState(() {
-      showSpinner = changeSpinner;
+      _showSpinner = true;
+      _errorMessage = '';
     });
+ 
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      if (credential.user == null) {
+        if (mounted) setState(() => _errorMessage = 'Login succeeded but no user data');
+        return;
+      }
+ 
+      // Remember the choice so AuthGate knows what to do next launch.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(kStayLoggedInKey, _stayLoggedIn);
+      } catch (e) {
+        debugPrint('Could not save stay-signed-in choice: $e');
+      }
+ 
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/homePage');
+    } on FirebaseAuthException catch (e) {
+      if (mounted) setState(() => _errorMessage = _messageFor(e));
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = 'Unexpected error: $e');
+    } finally {
+      if (mounted) setState(() => _showSpinner = false);
+    }
   }
-
-  void changeErrorMessage(String errorMessage) {
-    setState(() {
-      deniedEntryReason2 = errorMessage;
-    });
-  }
-
+ 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
-        actions: [],
-        title: Text('Login', style: TextStyle(fontSize: 30)),
+        title: const Text('Login', style: TextStyle(fontSize: 30)),
       ),
       body: ModalProgressHUD(
-        inAsyncCall: showSpinner,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24.0),
+        inAsyncCall: _showSpinner,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Flexible(
-                child: Hero(
-                  tag: 'contractor',
-                  child: SizedBox(
-                    height: 200.0,
-                    child: Image.asset('images/contractor.png'),
+              const SizedBox(height: 16),
+              Hero(
+                tag: 'contractor',
+                child: SizedBox(
+                  height: 180.0,
+                  child: Image.asset('images/contractor.png'),
+                ),
+              ),
+              const SizedBox(height: 32.0),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                textAlign: TextAlign.center,
+                decoration: kInputDecoration.copyWith(hintText: 'Enter your email'),
+              ),
+              const SizedBox(height: 8.0),
+              TextField(
+                controller: _passwordController,
+                obscureText: _hidePassword,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                onSubmitted: (_) => _logIn(),
+                textAlign: TextAlign.center,
+                decoration: kInputDecoration.copyWith(
+                  hintText: 'Enter your password',
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _hidePassword ? Icons.visibility : Icons.visibility_off,
+                    ),
+                    onPressed: () => setState(() => _hidePassword = !_hidePassword),
                   ),
                 ),
               ),
-              SizedBox(height: 48.0),
-              TextField(
-                keyboardType: TextInputType.emailAddress,
-                textAlign: TextAlign.center,
-                onChanged: (value) {
-                  setState(() {
-                    email = value;
-                  });
-                },
-                decoration: kInputDecoration.copyWith(
-                  hintText: 'Enter your email',
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _stayLoggedIn,
+                onChanged: (v) => setState(() => _stayLoggedIn = v ?? false),
+                title: const Text('Stay signed in on this device'),
+                subtitle: const Text(
+                  'Opens straight to your account next time. '
+                  'Only use this on your own phone.',
+                  style: TextStyle(fontSize: 12),
                 ),
               ),
-              SizedBox(height: 8.0),
-              TextField(
-                textAlign: TextAlign.center,
-                obscureText: true,
-                onChanged: (value) {
-                  setState(() {
-                    password = value;
-                  });
-                },
-                decoration: kInputDecoration.copyWith(
-                  hintText: 'Enter your password',
+              if (_errorMessage.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _errorMessage,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 ),
-              ),
-              Text(deniedEntryReason2, style: TextStyle(color: Colors.black)),
-              SizedBox(height: 24.0),
+              const SizedBox(height: 16.0),
               MaterialButton(
-                onPressed: () async {
-                  turnSpinnerOnOff(true);
-                  try {
-                    User? user;
-                    if (email != null &&
-                        email!.trim().isNotEmpty &&
-                        password != null &&
-                        password!.trim().isNotEmpty) {
-                      // safer check
-
-                      final UserCredential credential = await _auth
-                          .signInWithEmailAndPassword(
-                            email: email!.trim(),
-                            password: password!.trim(),
-                          );
-
-                      user = credential.user;
-                    } else {
-                      // Optional: handle empty fields early
-                      changeErrorMessage('Please enter email and password');
-                      turnSpinnerOnOff(false);
-                      return;
-                    }
-
-                    if (user != null) {
-                      if (!mounted) {
-                        // Widget gone — safe exit, no crash
-                        turnSpinnerOnOff(false);
-                        return;
-                      }
-
-                      // Now safe to use context
-                      // ignore: use_build_context_synchronously
-                      Navigator.pushReplacementNamed(context, '/homePage');
-
-                      turnSpinnerOnOff(false);
-                    } else {
-                      // Rare: sign-in "succeeded" but no user (edge case)
-                      changeErrorMessage('Login succeeded but no user data');
-                      turnSpinnerOnOff(false);
-                    }
-                  } on FirebaseAuthException catch (e) {
-                    String message;
-
-                    switch (e.code) {
-                      case 'user-not-found':
-                        message = 'No account found with this email';
-                        break;
-                      case 'wrong-password':
-                        message = 'Incorrect password';
-                        break;
-                      case 'invalid-email':
-                        message = 'Invalid email format';
-                        break;
-                      case 'user-disabled':
-                        message = 'Account disabled';
-                        break;
-                      case 'too-many-requests':
-                        message = 'Too many attempts — try again later';
-                        break;
-                      default:
-                        message = e.message ?? 'Login failed (${e.code})';
-                    }
-
-                    if (mounted) {
-                      // Also protect setState
-                      changeErrorMessage(message);
-                    }
-                    turnSpinnerOnOff(false);
-                  } catch (e) {
-                    if (mounted) {
-                      changeErrorMessage('Unexpected error: $e');
-                    }
-                    turnSpinnerOnOff(false);
-                  }
-                },
+                onPressed: _logIn,
                 color: Colors.grey,
-                child: Text('Log In'),
+                child: const Text('Log In'),
               ),
-              SizedBox(height: 15),
+              const SizedBox(height: 15),
               Row(
                 children: [
-                  Text('Don\'t have an account. '),
+                  const Text("Don't have an account? "),
                   TextButton(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/registerScreen');
-                    },
-                    child: Text('create account'),
+                    onPressed: () => Navigator.pushNamed(context, '/registerScreen'),
+                    child: const Text('create account'),
                   ),
                 ],
               ),

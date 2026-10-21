@@ -77,31 +77,29 @@ class _ContactsState extends State<Contacts> {
  
   Future<void> _syncWithPhoneContacts() async {
     if (_companyId == null) return;
- 
+
     setState(() => _syncing = true);
     try {
-      // flutter_contacts v2 API: permissions live under .permissions and
-      // return a status enum rather than a bool. "limited" (iOS 18+) means
-      // the person shared a subset of contacts, which is still usable.
-      final status = await FlutterContacts.permissions.request(PermissionType.read);
-      if (status != PermissionStatus.granted && status != PermissionStatus.limited) {
+      final status =
+          await FlutterContacts.permissions.request(PermissionType.read);
+      if (status != PermissionStatus.granted &&
+          status != PermissionStatus.limited) {
         throw Exception(
           status == PermissionStatus.permanentlyDenied
-              ? 'Contacts permission was denied. Turn it on for this app in your phone settings.'
+              ? 'Contacts permission was denied. Enable it in phone settings.'
               : 'Contacts permission was denied',
         );
       }
- 
-      // v2 only fetches id + display name unless told otherwise, so ask for
-      // phone and email explicitly.
+
       final deviceContacts = await FlutterContacts.getAll(
-        properties: {ContactProperty.name, ContactProperty.phone, ContactProperty.email},
+        properties: {
+          ContactProperty.name,
+          ContactProperty.phone,
+          ContactProperty.email,
+        },
       );
-      final groupId = await _ensureSyncedGroup();
- 
-      // Only ever compares against contacts THIS sync process previously
-      // created (matched by deviceContactId) — manual contacts and groups,
-      // the boss's own or anyone else's, are never read or touched here.
+
+      // Already-synced device IDs — we never remove these, only skip duplicates.
       final existingSynced = await firestore
           .collection('contacts')
           .where('companyId', isEqualTo: _companyId)
@@ -111,47 +109,75 @@ class _ContactsState extends State<Contacts> {
           .map((d) => d.data()['deviceContactId'] as String?)
           .whereType<String>()
           .toSet();
- 
-      final toImport = <Map<String, dynamic>>[];
+
+      // Candidates that are not already in the company address book.
+      final candidates = <_SyncCandidate>[];
       for (final contact in deviceContacts) {
-        // id and displayName are nullable in v2.
         final deviceId = contact.id;
         if (deviceId == null || alreadySyncedIds.contains(deviceId)) continue;
         final name = (contact.displayName ?? '').trim();
         if (name.isEmpty) continue;
-        final phone = contact.phones.isNotEmpty ? contact.phones.first.number : null;
-        final email = contact.emails.isNotEmpty ? contact.emails.first.address : null;
+        final phone =
+            contact.phones.isNotEmpty ? contact.phones.first.number : null;
+        final email =
+            contact.emails.isNotEmpty ? contact.emails.first.address : null;
         if (phone == null && email == null) continue;
- 
-        toImport.add({
-          'companyId': _companyId,
-          'name': name,
-          'phoneNumber': phone,
-          'email': email,
-          'groupId': groupId,
-          'source': 'synced',
-          'deviceContactId': deviceId,
-          'addedBy': services.currentUid,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        candidates.add(_SyncCandidate(
+          deviceId: deviceId,
+          name: name,
+          phone: phone,
+          email: email,
+        ));
       }
- 
-      // Firestore batches cap at 500 writes, so chunk large address books.
+
+      if (!mounted) return;
+
+      if (candidates.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No new phone contacts to sync. Existing contacts were left as-is.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      // Let the user pick contacts + which group to put them in.
+      final result = await _showSyncPicker(candidates);
+      if (result == null || result.selected.isEmpty) return;
+
+      final groupId = result.groupId; // may be null = no group
+      final toImport = result.selected;
+
       const chunkSize = 400;
       for (var i = 0; i < toImport.length; i += chunkSize) {
         final batch = firestore.batch();
-        final end = (i + chunkSize > toImport.length) ? toImport.length : i + chunkSize;
-        for (final data in toImport.sublist(i, end)) {
-          batch.set(firestore.collection('contacts').doc(), data);
+        final end = (i + chunkSize > toImport.length)
+            ? toImport.length
+            : i + chunkSize;
+        for (final c in toImport.sublist(i, end)) {
+          batch.set(firestore.collection('contacts').doc(), {
+            'companyId': _companyId,
+            'name': c.name,
+            'phoneNumber': c.phone,
+            'email': c.email,
+            'groupId': groupId,
+            'source': 'synced',
+            'deviceContactId': c.deviceId,
+            'addedBy': services.currentUid,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
         }
         await batch.commit();
       }
- 
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Synced ${toImport.length} new contact${toImport.length == 1 ? '' : 's'} from your phone',
+              'Added ${toImport.length} contact${toImport.length == 1 ? '' : 's'}. '
+              'Previous contacts were not changed.',
             ),
           ),
         );
@@ -165,6 +191,224 @@ class _ContactsState extends State<Contacts> {
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
+  }
+
+  Future<_SyncResult?> _showSyncPicker(List<_SyncCandidate> candidates) async {
+    final selected = <String>{for (final c in candidates) c.deviceId};
+    String? groupId;
+    final searchController = TextEditingController();
+    String search = '';
+
+    final result = await showDialog<_SyncResult>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            final filtered = candidates.where((c) {
+              if (search.isEmpty) return true;
+              final q = search.toLowerCase();
+              return c.name.toLowerCase().contains(q) ||
+                  (c.phone?.toLowerCase().contains(q) ?? false) ||
+                  (c.email?.toLowerCase().contains(q) ?? false);
+            }).toList()
+              ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('Choose contacts to sync'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: MediaQuery.of(dialogContext).size.height * 0.65,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Existing company contacts stay. Only new ones you check are added.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Target group
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: firestore
+                          .collection('contactGroups')
+                          .where('companyId', isEqualTo: _companyId)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        final groups = [...(snapshot.data?.docs ?? [])]
+                          ..sort((a, b) =>
+                              (a.data()['name'] as String? ?? '')
+                                  .toLowerCase()
+                                  .compareTo(
+                                    (b.data()['name'] as String? ?? '')
+                                        .toLowerCase(),
+                                  ));
+                        final valid = groups.any((g) => g.id == groupId)
+                            ? groupId
+                            : null;
+
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Add to group',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: valid,
+                                    isExpanded: true,
+                                    hint: const Text('No group'),
+                                    items: [
+                                      const DropdownMenuItem<String>(
+                                        value: null,
+                                        child: Text('No group'),
+                                      ),
+                                      ...groups.map(
+                                        (g) => DropdownMenuItem<String>(
+                                          value: g.id,
+                                          child: Text(
+                                            g.data()['name'] as String? ??
+                                                'Unnamed',
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (v) =>
+                                        setDialogState(() => groupId = v),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'New group',
+                              icon: const Icon(Icons.add_circle_outline),
+                              onPressed: () async {
+                                final id = await _pickOrCreateGroup(
+                                  dialogContext,
+                                  setDialogState,
+                                  groupId,
+                                );
+                                if (id != null) {
+                                  setDialogState(() => groupId = id);
+                                }
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
+
+                    TextField(
+                      controller: searchController,
+                      decoration: kInputDecoration.copyWith(
+                        hintText: 'Filter phone contacts',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        isDense: true,
+                      ),
+                      onChanged: (v) =>
+                          setDialogState(() => search = v.trim()),
+                    ),
+                    const SizedBox(height: 8),
+
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => setDialogState(() {
+                            selected
+                              ..clear()
+                              ..addAll(filtered.map((c) => c.deviceId));
+                          }),
+                          child: const Text('Select all shown'),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              setDialogState(() => selected.clear()),
+                          child: const Text('Clear'),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${selected.length} selected',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 1),
+
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final c = filtered[index];
+                          final checked = selected.contains(c.deviceId);
+                          return CheckboxListTile(
+                            dense: true,
+                            value: checked,
+                            title: Text(c.name),
+                            subtitle: Text(
+                              [
+                                if (c.phone != null) c.phone,
+                                if (c.email != null) c.email,
+                              ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onChanged: (v) {
+                              setDialogState(() {
+                                if (v == true) {
+                                  selected.add(c.deviceId);
+                                } else {
+                                  selected.remove(c.deviceId);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: selected.isEmpty
+                      ? null
+                      : () {
+                          final chosen = candidates
+                              .where((c) => selected.contains(c.deviceId))
+                              .toList();
+                          Navigator.pop(
+                            dialogContext,
+                            _SyncResult(selected: chosen, groupId: groupId),
+                          );
+                        },
+                  child: Text('Sync ${selected.length}'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    searchController.dispose();
+    return result;
   }
  
   Future<String?> _pickOrCreateGroup(
@@ -642,4 +886,25 @@ class _ContactsState extends State<Contacts> {
                 ),
     );
   }
+}
+
+class _SyncCandidate {
+  final String deviceId;
+  final String name;
+  final String? phone;
+  final String? email;
+
+  _SyncCandidate({
+    required this.deviceId,
+    required this.name,
+    this.phone,
+    this.email,
+  });
+}
+
+class _SyncResult {
+  final List<_SyncCandidate> selected;
+  final String? groupId;
+
+  _SyncResult({required this.selected, this.groupId});
 }
