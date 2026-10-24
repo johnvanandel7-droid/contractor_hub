@@ -1,9 +1,11 @@
 import 'package:contractor_hub/components/admin_card.dart';
+import 'package:contractor_hub/components/background_clock.dart';
 import 'package:flutter/material.dart';
 import 'package:contractor_hub/services/firebase_services.dart';
 import 'package:contractor_hub/components/app_bar.dart';
 import 'package:contractor_hub/components/reusable_button.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,6 +17,57 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final services = FirebaseServices.instance;
   final auth = FirebaseAuth.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    // Run after the first frame so a dialog can be shown safely.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _setupBackgroundClock());
+  }
+
+  Future<void> _setupBackgroundClock() async {
+    try {
+      final uid = auth.currentUser?.uid;
+      if (uid == null) return;
+      final user = await services.getUser(uid);
+      if (user == null || user['status'] == 'pending') return;
+      final companyId =
+          (user['companyId'] ?? user['companyName'])?.toString();
+      if (companyId == null || companyId.isEmpty) return;
+
+      // Explain first, only if "Allow all the time" isn't granted yet.
+      if (!await Permission.locationAlways.isGranted) {
+        if (!mounted) return;
+        final go = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Automatic clock in/out'),
+            content: const Text(
+              'To clock you in and out when you arrive at or leave a job site '
+              '(even with the app closed), Contractor Hub needs location set to '
+              '"Allow all the time" and notifications turned on.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Not now'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        );
+        if (go != true) return;
+      }
+
+      final granted = await BackgroundClock.requestPermissions();
+      if (granted) await BackgroundClock.syncGeofences(companyId);
+    } catch (e) {
+      debugPrint('Background clock setup failed: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -107,6 +107,9 @@ service cloud.firestore {
       // If managers also need to edit employees' records, add an OR clause
       // checking a role or company match once you have that data modeled.
       allow update: if isSignedIn() && request.auth.uid == resource.data.uid;
+
+      // A user can delete their own shifts (the clock screen offers this).
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.uid;
     }
 
     // ===================== Job images collection ====================
@@ -131,54 +134,58 @@ service cloud.firestore {
       allow update, delete: if isBossOf(resource.data.companyId);
     }
 
-   // ===================== Contacts ====================
-    match /contacts/{contactId} {
-      // Single-doc read: same company only.
-      allow get: if isSignedIn()
-          && resource.data.companyId == callerData().companyId;
+    // ===================== Contacts ====================
 
-      // List/query: only allowed when the query filters by the caller's company.
-      // Without this, .where('companyId' == ...) often returns permission-denied.
-      allow list: if isSignedIn()
-          && request.query.limit <= 500
-          && resource.data.companyId == callerData().companyId;
+// ===================== Contacts ====================
+    function userCompanyId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId;
+    }
+
+    match /contacts/{contactId} {
+      // Works for single reads AND queries that filter by companyId
+      allow read: if isSignedIn()
+          && resource.data.companyId == userCompanyId();
 
       allow create: if isSignedIn()
-          && request.resource.data.companyId == callerData().companyId
+          && request.resource.data.companyId == userCompanyId()
           && request.resource.data.addedBy == request.auth.uid
-          && request.resource.data.keys().hasAll(['companyId', 'name', 'addedBy', 'source'])
-          && (
-            request.resource.data.source == 'manual'
-            || (request.resource.data.source == 'synced'
-                && isBossOf(request.resource.data.companyId))
-          );
+          && request.resource.data.keys().hasAny(['name', 'companyId', 'addedBy', 'source']);
 
       allow update: if isSignedIn()
-          && resource.data.companyId == callerData().companyId
+          && resource.data.companyId == userCompanyId()
           && request.resource.data.companyId == resource.data.companyId;
 
       allow delete: if isSignedIn()
-          && resource.data.companyId == callerData().companyId
-          && (resource.data.addedBy == request.auth.uid
-              || isBossOf(resource.data.companyId));
+          && resource.data.companyId == userCompanyId()
+          && (
+            resource.data.addedBy == request.auth.uid
+            || (
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isEmployee == false
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+                 == resource.data.companyId
+            )
+          );
     }
 
     match /contactGroups/{groupId} {
-      allow get: if isSignedIn()
-          && resource.data.companyId == callerData().companyId;
-
-      allow list: if isSignedIn()
-          && resource.data.companyId == callerData().companyId;
+      allow read: if isSignedIn()
+          && resource.data.companyId == userCompanyId();
 
       allow create: if isSignedIn()
-          && request.resource.data.companyId == callerData().companyId
+          && request.resource.data.companyId == userCompanyId()
           && request.resource.data.createdBy == request.auth.uid
-          && request.resource.data.keys().hasAll(['companyId', 'name', 'createdBy']);
+          && request.resource.data.keys().hasAny(['name', 'companyId', 'createdBy']);
 
       allow update, delete: if isSignedIn()
-          && resource.data.companyId == callerData().companyId
-          && (resource.data.createdBy == request.auth.uid
-              || isBossOf(resource.data.companyId));
+          && resource.data.companyId == userCompanyId()
+          && (
+            resource.data.createdBy == request.auth.uid
+            || (
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isEmployee == false
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId
+                 == resource.data.companyId
+            )
+          );
     }
 
     // ===================== To-do items collection ====================

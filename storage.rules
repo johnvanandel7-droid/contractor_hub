@@ -23,5 +23,20 @@ service firebase.storage {
 
       allow update, delete: if false;
     }
+
+    // PO log receipts: company members can read and add. Deleting is allowed
+    // so removing a PO log also removes its photo (the app only offers delete
+    // to the person who created the log).
+    match /companies/{companyId}/poImages/{logId}/{fileName} {
+      allow read: if request.auth != null && userCompany() == companyId;
+
+      allow create: if request.auth != null
+          && userCompany() == companyId
+          && request.resource.size < 15 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*');
+
+      allow update: if false;
+      allow delete: if request.auth != null && userCompany() == companyId;
+    }
   }
 }

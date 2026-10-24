@@ -230,78 +230,57 @@ class _ContactsState extends State<Contacts> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Target group
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: firestore
                           .collection('contactGroups')
                           .where('companyId', isEqualTo: _companyId)
                           .snapshots(),
                       builder: (context, snapshot) {
-                        final groups = [...(snapshot.data?.docs ?? [])]
-                          ..sort((a, b) =>
-                              (a.data()['name'] as String? ?? '')
-                                  .toLowerCase()
-                                  .compareTo(
-                                    (b.data()['name'] as String? ?? '')
-                                        .toLowerCase(),
-                                  ));
-                        final valid = groups.any((g) => g.id == groupId)
-                            ? groupId
-                            : null;
+                        if (snapshot.hasError) {
+                          return Text(
+                            'Could not load groups: ${snapshot.error}',
+                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                          );
+                        }
 
-                        return Row(
-                          children: [
-                            Expanded(
-                              child: InputDecorator(
-                                decoration: const InputDecoration(
-                                  labelText: 'Add to group',
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: valid,
-                                    isExpanded: true,
-                                    hint: const Text('No group'),
-                                    items: [
-                                      const DropdownMenuItem<String>(
-                                        value: null,
-                                        child: Text('No group'),
-                                      ),
-                                      ...groups.map(
-                                        (g) => DropdownMenuItem<String>(
-                                          value: g.id,
-                                          child: Text(
-                                            g.data()['name'] as String? ??
-                                                'Unnamed',
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    onChanged: (v) =>
-                                        setDialogState(() => groupId = v),
-                                  ),
-                                ),
-                              ),
+                        final groups = [...(snapshot.data?.docs ?? [])]
+                          ..sort((a, b) => (a.data()['name'] as String? ?? '')
+                              .toLowerCase()
+                              .compareTo((b.data()['name'] as String? ?? '').toLowerCase()));
+
+                        // value must be in items, or null (hint shows)
+                        final valueInList =
+                          groups.any((g) => g.id == groupId) ? groupId : null;
+
+                        return InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Group',
+                            border: OutlineInputBorder(),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              hint: const Text('No group'),
+                              items: groups
+                                  .map(
+                                    (g) => DropdownMenuItem<String>(
+                                      value: g.id, // never null
+                                      child: Text(g.data()['name'] as String? ?? 'Unnamed'),
+                                    ),
+                                  )
+                                  .toList(),
+
+                                value: (groupId != null && groups.any((g) => g.id == groupId))
+                                  ? groupId
+                                  : null,
+                                onChanged: (value) =>
+                                  setDialogState(() => groupId = value),
                             ),
-                            IconButton(
-                              tooltip: 'New group',
-                              icon: const Icon(Icons.add_circle_outline),
-                              onPressed: () async {
-                                final id = await _pickOrCreateGroup(
-                                  dialogContext,
-                                  setDialogState,
-                                  groupId,
-                                );
-                                if (id != null) {
-                                  setDialogState(() => groupId = id);
-                                }
-                              },
-                            ),
-                          ],
+                          ),
                         );
                       },
                     ),
+                                        
                     const SizedBox(height: 10),
 
                     TextField(
@@ -542,9 +521,12 @@ class _ContactsState extends State<Contacts> {
                             tooltip: 'New group',
                             icon: const Icon(Icons.add_circle_outline),
                             onPressed: () async {
-                              final newGroupId =
-                                  await _pickOrCreateGroup(dialogContext, setDialogState, selectedGroupId);
-                              if (newGroupId != null) {
+                              final newGroupId = await _pickOrCreateGroup(
+                                dialogContext,
+                                setDialogState,
+                                selectedGroupId,
+                              );
+                              if (newGroupId != null && dialogContext.mounted) {
                                 setDialogState(() => selectedGroupId = newGroupId);
                               }
                             },

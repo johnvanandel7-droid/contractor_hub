@@ -1,3 +1,4 @@
+import 'package:contractor_hub/components/background_clock.dart';
 import 'package:contractor_hub/screens/administrator_panel.dart';
 import 'package:contractor_hub/screens/auth_gate.dart';
 import 'package:contractor_hub/screens/company_files.dart';
@@ -23,6 +24,8 @@ import 'screens/login_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await BackgroundClock.init();
+  await BackgroundClock.restoreOngoingNotification();
   runApp(
     MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -56,8 +59,8 @@ void main() async {
         '/joinRequests': (context) => JoinRequestsScreen(),
         '/contacts': (context) => Contacts(),
         '/constructionImages': (context) => ConstructionImages(),
-        '/quickbooksConnection':(context) => QuickbooksConnection(),
-        '/workStats':(context) => WorkStats(),
+        '/quickbooksConnection': (context) => QuickbooksConnection(),
+        '/workStats': (context) => WorkStats(),
         '/authGate': (context) => AuthGate(),
       },
     ),
